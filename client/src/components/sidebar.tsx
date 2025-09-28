@@ -26,6 +26,15 @@ interface SidebarProps {
   currentPath: string;
 }
 
+interface ToolItem {
+  name: string;
+  href: string;
+  icon: React.ComponentType<any>;
+  current: boolean;
+  disabled?: boolean;
+  onClick?: boolean;
+}
+
 export default function Sidebar({ collapsed, onToggleCollapse, currentPath }: SidebarProps) {
   const { user } = useAuth();
   const [location] = useLocation();
@@ -39,30 +48,64 @@ export default function Sidebar({ collapsed, onToggleCollapse, currentPath }: Si
     }
   ];
 
-  const tools = [
+  // Extract project ID from current path if we're in a project
+  const projectMatch = currentPath.match(/^\/projects\/([^\/]+)/);
+  const currentProjectId = projectMatch ? projectMatch[1] : null;
+
+  const tools: ToolItem[] = currentProjectId ? [
+    {
+      name: "Characters",
+      href: `/projects/${currentProjectId}/characters`,
+      icon: Users,
+      current: location.startsWith(`/projects/${currentProjectId}/characters`)
+    },
+    {
+      name: "World Building",
+      href: `/projects/${currentProjectId}/worldbuilding`,
+      icon: Globe,
+      current: location.startsWith(`/projects/${currentProjectId}/worldbuilding`)
+    },
+    {
+      name: "Timeline",
+      href: `/projects/${currentProjectId}/timeline`,
+      icon: Clock,
+      current: location.startsWith(`/projects/${currentProjectId}/timeline`)
+    },
+    {
+      name: "AI Assistant",
+      href: "#",
+      icon: Bot,
+      current: false,
+      onClick: true // This will be handled differently
+    }
+  ] : [
     {
       name: "Characters",
       href: "/characters",
       icon: Users,
-      current: location.startsWith("/characters")
+      current: location.startsWith("/characters"),
+      disabled: true
     },
     {
       name: "World Building",
       href: "/worldbuilding",
       icon: Globe,
-      current: location.startsWith("/worldbuilding")
+      current: location.startsWith("/worldbuilding"),
+      disabled: true
     },
     {
       name: "Timeline",
       href: "/timeline",
       icon: Clock,
-      current: location.startsWith("/timeline")
+      current: location.startsWith("/timeline"),
+      disabled: true
     },
     {
       name: "AI Assistant",
       href: "/ai",
       icon: Bot,
-      current: location.startsWith("/ai")
+      current: location.startsWith("/ai"),
+      disabled: true
     }
   ];
 
@@ -190,22 +233,37 @@ export default function Sidebar({ collapsed, onToggleCollapse, currentPath }: Si
                 Tools
               </h3>
               <div className="space-y-1">
-                {tools.map((item) => (
-                  <Link key={item.name} href={item.href}>
-                    <div
-                      className={cn(
-                        "flex items-center px-3 py-2 rounded-lg transition-colors",
-                        item.current
-                          ? "bg-accent/20 text-accent-foreground"
-                          : "hover:bg-secondary/20"
-                      )}
-                      data-testid={`nav-${item.name.toLowerCase().replace(/\s+/g, '-')}`}
-                    >
-                      <item.icon className="h-4 w-4" />
-                      <span className="ml-3 text-sm">{item.name}</span>
-                    </div>
-                  </Link>
-                ))}
+                {tools.map((item) => {
+                  if (item.disabled) {
+                    return (
+                      <div
+                        key={item.name}
+                        className="flex items-center px-3 py-2 rounded-lg opacity-50 cursor-not-allowed"
+                        data-testid={`nav-${item.name.toLowerCase().replace(/\s+/g, '-')}`}
+                      >
+                        <item.icon className="h-4 w-4" />
+                        <span className="ml-3 text-sm">{item.name}</span>
+                      </div>
+                    );
+                  }
+                  
+                  return (
+                    <Link key={item.name} href={item.href}>
+                      <div
+                        className={cn(
+                          "flex items-center px-3 py-2 rounded-lg transition-colors",
+                          item.current
+                            ? "bg-accent/20 text-accent-foreground"
+                            : "hover:bg-secondary/20"
+                        )}
+                        data-testid={`nav-${item.name.toLowerCase().replace(/\s+/g, '-')}`}
+                      >
+                        <item.icon className="h-4 w-4" />
+                        <span className="ml-3 text-sm">{item.name}</span>
+                      </div>
+                    </Link>
+                  );
+                })}
               </div>
             </div>
           )}

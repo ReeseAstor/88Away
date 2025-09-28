@@ -6,6 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -29,7 +33,7 @@ import {
   Eye,
   Calendar
 } from "lucide-react";
-import { Project as ProjectType, Document, ProjectWithCollaborators } from "@shared/schema";
+import { Project as ProjectType, Document, ProjectWithCollaborators, Character } from "@shared/schema";
 
 export default function Project() {
   const { id } = useParams();
@@ -41,6 +45,16 @@ export default function Project() {
   const [selectedDocument, setSelectedDocument] = useState<string | null>(null);
   const [documentContent, setDocumentContent] = useState("");
   const [activeTab, setActiveTab] = useState("overview");
+  const [showCharacterModal, setShowCharacterModal] = useState(false);
+  const [editingCharacter, setEditingCharacter] = useState<Character | null>(null);
+  const [characterFormData, setCharacterFormData] = useState({
+    name: "",
+    description: "",
+    background: "",
+    personality: "",
+    appearance: "",
+    notes: ""
+  });
 
   // Redirect to home if not authenticated
   useEffect(() => {
@@ -72,6 +86,12 @@ export default function Project() {
   const { data: selectedDocumentData } = useQuery<Document>({
     queryKey: ['/api/documents', selectedDocument],
     enabled: !!selectedDocument && isAuthenticated,
+    retry: false,
+  });
+
+  const { data: characters = [] } = useQuery<Character[]>({
+    queryKey: ['/api/projects', id, 'characters'],
+    enabled: !!id && isAuthenticated,
     retry: false,
   });
 
@@ -167,6 +187,64 @@ export default function Project() {
         type: "chapter"
       });
     }
+  };
+
+  const createCharacterMutation = useMutation({
+    mutationFn: async (characterData: any) => {
+      return apiRequest("POST", `/api/projects/${id}/characters`, characterData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'characters'] });
+      setShowCharacterModal(false);
+      setCharacterFormData({
+        name: "",
+        description: "",
+        background: "",
+        personality: "",
+        appearance: "",
+        notes: ""
+      });
+      toast({
+        title: "Success",
+        description: "Character created successfully!",
+      });
+    },
+    onError: (error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: "Error",
+        description: "Failed to create character. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleCharacterSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    createCharacterMutation.mutate(characterFormData);
+  };
+
+  const handleCloseCharacterModal = () => {
+    setShowCharacterModal(false);
+    setEditingCharacter(null);
+    setCharacterFormData({
+      name: "",
+      description: "",
+      background: "",
+      personality: "",
+      appearance: "",
+      notes: ""
+    });
   };
 
   if (!isAuthenticated || isLoading || projectLoading) {
@@ -482,7 +560,10 @@ export default function Project() {
                   <p className="text-muted-foreground mb-4">
                     Manage your story's characters, their backgrounds, and relationships.
                   </p>
-                  <Button data-testid="button-add-character">
+                  <Button 
+                    onClick={() => setShowCharacterModal(true)}
+                    data-testid="button-add-character"
+                  >
                     <Plus className="mr-2 h-4 w-4" />
                     Add Character
                   </Button>
@@ -526,6 +607,113 @@ export default function Project() {
         onClose={() => setShowAiModal(false)}
         projects={[project]}
       />
+
+      <Dialog open={showCharacterModal} onOpenChange={handleCloseCharacterModal}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto" data-testid="modal-character">
+          <DialogHeader>
+            <DialogTitle>
+              {editingCharacter ? "Edit Character" : "Create New Character"}
+            </DialogTitle>
+            <DialogDescription>
+              {editingCharacter ? "Update your character's details." : "Add a new character to your story."}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <form onSubmit={handleCharacterSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Character Name *</Label>
+              <Input
+                id="name"
+                value={characterFormData.name}
+                onChange={(e) => setCharacterFormData({ ...characterFormData, name: e.target.value })}
+                placeholder="Enter character name"
+                required
+                data-testid="input-character-name"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="description">Brief Description</Label>
+              <Input
+                id="description"
+                value={characterFormData.description}
+                onChange={(e) => setCharacterFormData({ ...characterFormData, description: e.target.value })}
+                placeholder="Quick character description"
+                data-testid="input-character-description"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="personality">Personality</Label>
+              <Textarea
+                id="personality"
+                value={characterFormData.personality}
+                onChange={(e) => setCharacterFormData({ ...characterFormData, personality: e.target.value })}
+                placeholder="Describe their personality traits, quirks, and behavior..."
+                className="resize-none h-20"
+                data-testid="input-character-personality"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="appearance">Appearance</Label>
+              <Textarea
+                id="appearance"
+                value={characterFormData.appearance}
+                onChange={(e) => setCharacterFormData({ ...characterFormData, appearance: e.target.value })}
+                placeholder="Physical description, clothing style, distinctive features..."
+                className="resize-none h-20"
+                data-testid="input-character-appearance"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="background">Background</Label>
+              <Textarea
+                id="background"
+                value={characterFormData.background}
+                onChange={(e) => setCharacterFormData({ ...characterFormData, background: e.target.value })}
+                placeholder="Character's history, origin, significant life events..."
+                className="resize-none h-20"
+                data-testid="input-character-background"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="notes">Additional Notes</Label>
+              <Textarea
+                id="notes"
+                value={characterFormData.notes}
+                onChange={(e) => setCharacterFormData({ ...characterFormData, notes: e.target.value })}
+                placeholder="Character development notes, relationships, plot relevance..."
+                className="resize-none h-20"
+                data-testid="input-character-notes"
+              />
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-4 border-t border-border">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={handleCloseCharacterModal}
+                data-testid="button-cancel-character"
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={createCharacterMutation.isPending || !characterFormData.name.trim()}
+                data-testid="button-save-character"
+              >
+                {createCharacterMutation.isPending
+                  ? "Creating..." 
+                  : editingCharacter ? "Update Character" : "Create Character"
+                }
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
