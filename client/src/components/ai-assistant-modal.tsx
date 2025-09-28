@@ -124,7 +124,7 @@ export default function AiAssistantModal({ open, onClose, projects }: AiAssistan
 
     generateMutation.mutate({
       persona: selectedPersona,
-      projectId: selectedProject || "",
+      projectId: selectedProject && selectedProject !== "none" ? selectedProject : "",
       userPrompt: prompt
     });
   };
@@ -206,7 +206,7 @@ export default function AiAssistantModal({ open, onClose, projects }: AiAssistan
                         <SelectValue placeholder="Select a project (optional)" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">No specific project</SelectItem>
+                        <SelectItem value="none">No specific project</SelectItem>
                         {projects.map((project) => (
                           <SelectItem key={project.id} value={project.id}>
                             {project.title}
