@@ -1,0 +1,248 @@
+What I’m delivering
+
+Concrete, production-ready example request bodies and system+user message payloads for the AI Orchestrator’s Muse, Editor, and Coach personas, plus example API requests/responses you can paste into your repo scaffolding (mock or real calls). Each example includes safety constraints and minimal post‑processing notes.
+
+---
+
+1. API: POST /api/v1/ai/generate — common request envelope
+
+Request body (JSON):
+
+{
+  "intent": "string",
+  "persona": "muse|editor|coach",
+  "project_id": "uuid",
+  "context_refs": ["scene:uuid","char:uuid"],
+  "params": {
+    "temperature": 0.7,
+    "max_tokens": 800,
+    "deterministic": false,
+    "style_profile_id": "uuid",
+    "placeholders": ["ph:uuid"]
+  }
+}
+
+
+Response (success, 200):
+
+{
+  "request_id": "uuid",
+  "persona": "muse",
+  "output_id": "uuid",
+  "content_type": "scene|outline|edit",
+  "content": "string",
+  "metadata": {
+    "model": "draft-v1",
+    "tokens_in": 350,
+    "tokens_out": 720,
+    "safety_flags": []
+  }
+}
+
+
+---
+
+2. Muse — Scene Draft (system + user messages)
+
+System message (string): You are Muse. Create evocative, sensory scenes that align with the provided story bible. Prioritize emotion, sensory detail, and character voice. Enforce safety: block explicit sexual content and non-consensual material; if a placeholder is type steamy, render implied intimacy only. Validate ages (all characters must be 18+). Output must include an opening image line and end with a one-line hook. Return plain text.
+
+User message (string): Project: {project_title}; Scene intent: {one_sentence_intent}; Setting: {location_name, time_of_day}; Characters: [{name:char_id:brief_status}, …]; Mood: tension={0–10}, intimacy={0–10}, pacing={slow|medium|fast}; Placeholders: [{id,type,intensity,rendering_mode}]; Context: last_scene_summary: “{text}” ; Length target: 400–800 words.
+
+Example orchestration request body:
+
+{
+  "intent": "draft_scene",
+  "persona": "muse",
+  "project_id": "proj-123",
+  "context_refs": ["scene-101","char-55"],
+  "params": {
+    "temperature": 0.8,
+    "max_tokens": 800,
+    "placeholders": ["ph-steamy-42"]
+  }
+}
+
+
+Example response content (excerpt): { “content_type”:“scene”, “content”:“Moonlight pooled on the sill, a silver bruise across the floor. Mara slid a chair back, the scrape loud in the hush. She smelled rain and old paper. …\n\nHook: She reaches for the envelope and the name on it is someone she thought dead.” }
+
+Post-processing notes:
+
+• Run safety classifier on returned text; if flagged, re-run generation with stricter system constraints (temp=0.3) and rendering_mode=implied.
+• Attach changelog and create TextVersion record.
+
+
+---
+
+3. Editor — Edit for Clarity (system + user messages)
+
+System message: You are Editor. Improve clarity, grammar, and flow while preserving the author’s voice and plot facts. Do not invent new plot events. If contradictions appear, list them separately. Return a JSON object: {edited_text, diff: [{original_span, edited_span}], rationale}.
+
+User message: Task: Edit paragraph for clarity. Original: “{original_paragraph}”. Goals: {concise:true, preserve_voice:true, remove_passive:true}. StyleProfile: {id}.
+
+Example request:
+
+{
+  "intent": "edit_paragraph",
+  "persona": "editor",
+  "project_id": "proj-123",
+  "context_refs": ["textv-789"],
+  "params": {
+    "temperature": 0.2,
+    "max_tokens": 200
+  }
+}
+
+
+Example response content:
+
+{
+  "content_type":"edit",
+  "content": {
+    "edited_text": "Mara pushed the chair back and caught her breath as rain tapped the window.",
+    "diff": [
+      {"original":"She pushed the chair back, and it was loud in the quiet room.","edited":"Mara pushed the chair back and caught her breath as rain tapped the window."}
+    ],
+    "rationale":"Tightened sentences, removed passive phrasing, retained sensory cue."
+  },
+  "metadata":{"model":"polish-v1","tokens_in":45,"tokens_out":32}
+}
+
+
+Post-processing notes:
+
+• Persist edited_text as a new TextVersion with parent id.
+• If contradictions detected, create a ConsistencyIssue record linked to project.
+
+
+---
+
+4. Coach — Outline / Beats (system + user messages)
+
+System message: You are Coach. Produce concise, structured outputs (checklist, acts, beats). When asked for outlines, return JSON: {acts:[{title,beats:[{title,purpose,chapter_range,emotional_hook}]}]}. Keep outputs actionable.
+
+User message: Project: {title}; Premise: “{one_line_premise}”; Target_length: 80k; Tone: {tone}; Must-have beats: [list]; Constraints: {constraints}.
+
+Example request:
+
+{
+  "intent": "generate_outline",
+  "persona": "coach",
+  "project_id": "proj-123",
+  "params": {
+    "temperature": 0.2,
+    "max_tokens": 400
+  }
+}
+
+
+Example response content:
+
+{
+  "content_type":"outline",
+  "content":{
+    "acts":[
+      {"title":"Act I – Setup","beats":[
+        {"title":"Inciting Incident","purpose":"Propel protagonist into conflict","chapter_range":"1-3","emotional_hook":"Shocks sense of security"}
+      ]},
+      {"title":"Act II – Confrontation","beats":[{"title":"False Victory","purpose":"Raise stakes","chapter_range":"10-20","emotional_hook":"Bittersweet hope"}]}
+    ]
+  },
+  "metadata":{"model":"coach-v1","tokens_in":80,"tokens_out":210}
+}
+
+
+Post-processing notes:
+
+• Validate JSON schema; store as project_outline.
+• Enqueue generation of micro-scenes for flagged beats using Muse (composite flow).
+
+
+---
+
+5. Safety-enforcing system prompt snippet (must be included in all personas)
+
+Include this invariant at the top of every system message: You must not generate explicit sexual content, graphic descriptions of sexual acts, or non-consensual / exploitative content. Verify all characters referenced are 18+. If content touches sexual themes, produce implied, emotionally focused language only. Flag any safety violation with code: SAFETY_VIOLATION_{reason} in response.metadata.safety_flags.
+
+---
+
+6. Example composite flow: “Draft scene (Muse) + Polish (Editor)”
+
+1. Receive UI request for draft+polish.
+2. Orchestrator: call Muse with params {temp:0.8,max_tokens:900}.
+3. On Muse success: run safety classifier. If safe, call Editor polish with system instruct: “Polish preserving meaning; fix grammar; keep voice.” Params {temp:0.2,max_tokens:400}.
+4. Return combined response:
+
+
+{
+  "persona_pipeline":["muse","editor"],
+  "draft_output_id":"uuid",
+  "polish_output_id":"uuid",
+  "final_content":"string",
+  "changelog":["expanded sensory detail","corrected tense","trimmed repetition"],
+  "metadata":{"tokens_total":1400,"safety_flags":[]}
+}
+
+
+---
+
+7. Mock test payloads (for unit/integration tests)
+
+Muse test payload:
+
+{
+  "intent":"draft_scene",
+  "persona":"muse",
+  "project_id":"test-proj",
+  "context_refs":["char-test-1"],
+  "params":{"temperature":0.7,"max_tokens":200,"placeholders":[]}
+}
+
+
+Editor test payload:
+
+{
+  "intent":"edit_paragraph",
+  "persona":"editor",
+  "project_id":"test-proj",
+  "context_refs":[],
+  "params":{"temperature":0.1,"max_tokens":120}
+}
+
+
+Coach test payload:
+
+{
+  "intent":"generate_outline",
+  "persona":"coach",
+  "project_id":"test-proj",
+  "params":{"temperature":0.2,"max_tokens":200}
+}
+
+
+Expected test assertions:
+
+• API returns 200 and content_type matches intent.
+• metadata.safety_flags is an array.
+• JSON outputs conform to declared schema (outline, edit, scene text).
+
+
+---
+
+8. Implementation notes & tips
+
+• Store persona system messages as immutable templates in DB or config; reference by template_id in requests.
+• Use context_version_id and context_hash to enable safe caching; never cache outputs produced with high randomness.
+• Always run a safety classifier post-generation; for flagged outputs, attempt constrained regeneration before human escalation.
+• Expose deterministic flag for reproducible outputs (temp=0.0, top_p=0.0).
+• Log prompt templates and context (hashed) to audit prompt provenance while avoiding storing raw sensitive user data unless allowed by policy.
+
+
+---
+
+If you want, I can:
+
+• Generate exact OpenAPI request/response schemas for these endpoints, or
+• Produce sample unit-test code (Jest or Pytest) that asserts schema and safety behavior.
+
+
+Which would you like next?
