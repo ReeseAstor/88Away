@@ -22,20 +22,7 @@ import {
   Heart,
   MapPin
 } from "lucide-react";
-
-interface Character {
-  id: string;
-  name: string;
-  description?: string;
-  background?: string;
-  personality?: string;
-  appearance?: string;
-  relationships?: any;
-  notes?: string;
-  projectId: string;
-  createdAt: string;
-  updatedAt: string;
-}
+import { Project, Character } from "@shared/schema";
 
 export default function Characters() {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -69,14 +56,14 @@ export default function Characters() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  const { data: projects = [] } = useQuery({
+  const { data: projects = [] } = useQuery<Project[]>({
     queryKey: ['/api/projects'],
     enabled: isAuthenticated,
     retry: false,
   });
 
   // For now, get characters from all projects - in a real app, this would be filtered by project
-  const { data: characters = [], isLoading: charactersLoading } = useQuery({
+  const { data: characters = [], isLoading: charactersLoading } = useQuery<Character[]>({
     queryKey: ['/api/characters'],
     enabled: isAuthenticated && projects.length > 0,
     queryFn: async () => {
@@ -410,8 +397,8 @@ export default function Characters() {
 
                     <div className="pt-2 border-t border-border">
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>Created {new Date(character.createdAt).toLocaleDateString()}</span>
-                        <span>Updated {new Date(character.updatedAt).toLocaleDateString()}</span>
+                        <span>Created {character.createdAt ? new Date(character.createdAt).toLocaleDateString() : 'Unknown'}</span>
+                        <span>Updated {character.updatedAt ? new Date(character.updatedAt).toLocaleDateString() : 'Unknown'}</span>
                       </div>
                     </div>
                   </CardContent>

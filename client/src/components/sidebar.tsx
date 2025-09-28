@@ -115,7 +115,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, currentPath }: Si
       <div className="p-4 border-b border-secondary/20">
         <div className="flex items-center space-x-3">
           <Avatar className="h-10 w-10" data-testid="avatar-user">
-            <AvatarImage src={user?.profileImageUrl} />
+            <AvatarImage src={user?.profileImageUrl || undefined} />
             <AvatarFallback className="bg-accent text-accent-foreground">
               {getUserInitials()}
             </AvatarFallback>

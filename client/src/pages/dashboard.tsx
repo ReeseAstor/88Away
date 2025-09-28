@@ -29,19 +29,7 @@ import {
   Bot,
   Download
 } from "lucide-react";
-
-interface Project {
-  id: string;
-  title: string;
-  description?: string;
-  genre?: string;
-  targetWordCount?: number;
-  currentWordCount: number;
-  deadline?: string;
-  ownerId: string;
-  createdAt: string;
-  updatedAt: string;
-}
+import { Project, AiGeneration } from "@shared/schema";
 
 interface DashboardStats {
   totalWords: number;
@@ -73,13 +61,13 @@ export default function Dashboard() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  const { data: projects = [], isLoading: projectsLoading } = useQuery({
+  const { data: projects = [], isLoading: projectsLoading } = useQuery<Project[]>({
     queryKey: ['/api/projects'],
     enabled: isAuthenticated,
     retry: false,
   });
 
-  const { data: aiGenerations = [] } = useQuery({
+  const { data: aiGenerations = [] } = useQuery<AiGeneration[]>({
     queryKey: ['/api/ai/history'],
     enabled: isAuthenticated,
     retry: false,
@@ -87,7 +75,7 @@ export default function Dashboard() {
 
   // Calculate dashboard stats
   const stats: DashboardStats = {
-    totalWords: projects.reduce((total: number, project: Project) => total + project.currentWordCount, 0),
+    totalWords: projects.reduce((total: number, project: Project) => total + (project.currentWordCount || 0), 0),
     activeProjects: projects.length,
     aiSessions: aiGenerations.length,
     collaborators: 8 // This would come from actual collaborator data
@@ -297,7 +285,7 @@ export default function Dashboard() {
                     <div className="space-y-4">
                       {projects.map((project: Project) => {
                         const progress = project.targetWordCount 
-                          ? Math.round((project.currentWordCount / project.targetWordCount) * 100)
+                          ? Math.round(((project.currentWordCount || 0) / project.targetWordCount) * 100)
                           : 0;
                         
                         return (
@@ -316,11 +304,11 @@ export default function Dashboard() {
                                   </h3>
                                   <div className="flex items-center space-x-4 text-sm text-muted-foreground">
                                     <span data-testid={`text-word-count-${project.id}`}>
-                                      {project.currentWordCount.toLocaleString()} words
+                                      {(project.currentWordCount || 0).toLocaleString()} words
                                     </span>
                                     <span>•</span>
                                     <span data-testid={`text-last-modified-${project.id}`}>
-                                      {new Date(project.updatedAt).toLocaleDateString()}
+                                      {project.updatedAt ? new Date(project.updatedAt).toLocaleDateString() : 'Unknown'}
                                     </span>
                                     {project.genre && (
                                       <>

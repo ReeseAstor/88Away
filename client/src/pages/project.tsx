@@ -29,6 +29,7 @@ import {
   Eye,
   Calendar
 } from "lucide-react";
+import { Project, Document, ProjectWithCollaborators } from "@shared/schema";
 
 export default function Project() {
   const { id } = useParams();
@@ -56,19 +57,19 @@ export default function Project() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  const { data: project, isLoading: projectLoading } = useQuery({
+  const { data: project, isLoading: projectLoading } = useQuery<ProjectWithCollaborators>({
     queryKey: ['/api/projects', id],
     enabled: !!id && isAuthenticated,
     retry: false,
   });
 
-  const { data: documents = [] } = useQuery({
+  const { data: documents = [] } = useQuery<Document[]>({
     queryKey: ['/api/projects', id, 'documents'],
     enabled: !!id && isAuthenticated,
     retry: false,
   });
 
-  const { data: selectedDocumentData } = useQuery({
+  const { data: selectedDocumentData } = useQuery<Document>({
     queryKey: ['/api/documents', selectedDocument],
     enabled: !!selectedDocument && isAuthenticated,
     retry: false,
@@ -188,7 +189,7 @@ export default function Project() {
   }
 
   const progress = project.targetWordCount 
-    ? Math.round((project.currentWordCount / project.targetWordCount) * 100)
+    ? Math.round(((project.currentWordCount || 0) / project.targetWordCount) * 100)
     : 0;
 
   return (
@@ -210,7 +211,7 @@ export default function Project() {
                 </h1>
                 <div className="flex items-center space-x-4 text-sm text-muted-foreground">
                   <span data-testid="text-word-count">
-                    {project.currentWordCount.toLocaleString()} words
+                    {(project.currentWordCount || 0).toLocaleString()} words
                   </span>
                   {project.genre && (
                     <>
@@ -296,7 +297,7 @@ export default function Project() {
                             <div className="space-y-2">
                               <div className="flex justify-between text-sm">
                                 <span>Current Words</span>
-                                <span>{project.currentWordCount.toLocaleString()}</span>
+                                <span>{(project.currentWordCount || 0).toLocaleString()}</span>
                               </div>
                               {project.targetWordCount && (
                                 <>
@@ -344,7 +345,7 @@ export default function Project() {
                             <div>
                               <p className="text-sm text-card-foreground">Project created</p>
                               <p className="text-xs text-muted-foreground">
-                                {new Date(project.createdAt).toLocaleDateString()}
+                                {project.createdAt ? new Date(project.createdAt).toLocaleDateString() : 'Unknown'}
                               </p>
                             </div>
                           </div>
@@ -353,7 +354,7 @@ export default function Project() {
                             <div>
                               <p className="text-sm text-card-foreground">Last updated</p>
                               <p className="text-xs text-muted-foreground">
-                                {new Date(project.updatedAt).toLocaleDateString()}
+                                {project.updatedAt ? new Date(project.updatedAt).toLocaleDateString() : 'Unknown'}
                               </p>
                             </div>
                           </div>

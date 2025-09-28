@@ -26,18 +26,7 @@ import {
   Scroll,
   Sparkles
 } from "lucide-react";
-
-interface WorldbuildingEntry {
-  id: string;
-  title: string;
-  type: string;
-  description?: string;
-  details?: any;
-  tags?: string[];
-  projectId: string;
-  createdAt: string;
-  updatedAt: string;
-}
+import { Project, WorldbuildingEntry, WorldbuildingDetails } from "@shared/schema";
 
 const entryTypes = [
   { value: "location", label: "Location", icon: MapPin, color: "text-chart-1" },
@@ -81,13 +70,13 @@ export default function Worldbuilding() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  const { data: projects = [] } = useQuery({
+  const { data: projects = [] } = useQuery<Project[]>({
     queryKey: ['/api/projects'],
     enabled: isAuthenticated,
     retry: false,
   });
 
-  const { data: entries = [], isLoading: entriesLoading } = useQuery({
+  const { data: entries = [], isLoading: entriesLoading } = useQuery<WorldbuildingEntry[]>({
     queryKey: ['/api/worldbuilding'],
     enabled: isAuthenticated && projects.length > 0,
     queryFn: async () => {
@@ -234,7 +223,7 @@ export default function Worldbuilding() {
       title: entry.title,
       type: entry.type,
       description: entry.description || "",
-      details: entry.details?.content || "",
+      details: entry.details && typeof entry.details === 'object' && 'content' in entry.details && typeof entry.details.content === 'string' ? entry.details.content : "",
       tags: entry.tags?.join(', ') || ""
     });
     setShowEntryModal(true);
@@ -428,11 +417,11 @@ export default function Worldbuilding() {
                         </div>
                       )}
                       
-                      {entry.details?.content && (
+                      {entry.details && typeof entry.details === 'object' && 'content' in entry.details && entry.details.content && (
                         <div>
                           <h4 className="text-sm font-medium text-card-foreground mb-1">Details</h4>
                           <p className="text-sm text-muted-foreground line-clamp-2">
-                            {entry.details.content}
+                            {entry.details && typeof entry.details === 'object' && 'content' in entry.details && typeof entry.details.content === 'string' ? entry.details.content : ''}
                           </p>
                         </div>
                       )}
@@ -454,8 +443,8 @@ export default function Worldbuilding() {
 
                       <div className="pt-2 border-t border-border">
                         <div className="flex items-center justify-between text-xs text-muted-foreground">
-                          <span>Created {new Date(entry.createdAt).toLocaleDateString()}</span>
-                          <span>Updated {new Date(entry.updatedAt).toLocaleDateString()}</span>
+                          <span>Created {entry.createdAt ? new Date(entry.createdAt).toLocaleDateString() : 'Unknown'}</span>
+                          <span>Updated {entry.updatedAt ? new Date(entry.updatedAt).toLocaleDateString() : 'Unknown'}</span>
                         </div>
                       </div>
                     </CardContent>
