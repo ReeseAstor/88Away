@@ -29,7 +29,7 @@ import {
   Eye,
   Calendar
 } from "lucide-react";
-import { Project, Document, ProjectWithCollaborators } from "@shared/schema";
+import { Project as ProjectType, Document, ProjectWithCollaborators } from "@shared/schema";
 
 export default function Project() {
   const { id } = useParams();
