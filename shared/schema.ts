@@ -279,6 +279,12 @@ export const insertProjectCollaboratorSchema = createInsertSchema(projectCollabo
   createdAt: true,
 });
 
+// Worldbuilding details interface
+export interface WorldbuildingDetails {
+  content?: string;
+  [key: string]: any; // Allow additional properties
+}
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;

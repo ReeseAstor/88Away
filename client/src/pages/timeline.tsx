@@ -26,20 +26,7 @@ import {
   ChevronDown,
   ChevronRight
 } from "lucide-react";
-
-interface TimelineEvent {
-  id: string;
-  title: string;
-  description?: string;
-  date: string;
-  importance: number;
-  tags?: string[];
-  relatedCharacters?: string[];
-  relatedLocations?: string[];
-  projectId: string;
-  createdAt: string;
-  updatedAt: string;
-}
+import { Project, TimelineEvent } from "@shared/schema";
 
 const importanceLevels = [
   { value: 1, label: "Minor", color: "bg-muted" },
@@ -84,13 +71,13 @@ export default function Timeline() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  const { data: projects = [] } = useQuery({
+  const { data: projects = [] } = useQuery<Project[]>({
     queryKey: ['/api/projects'],
     enabled: isAuthenticated,
     retry: false,
   });
 
-  const { data: events = [], isLoading: eventsLoading } = useQuery({
+  const { data: events = [], isLoading: eventsLoading } = useQuery<TimelineEvent[]>({
     queryKey: ['/api/timeline'],
     enabled: isAuthenticated && projects.length > 0,
     queryFn: async () => {
@@ -240,8 +227,8 @@ export default function Timeline() {
     setFormData({
       title: event.title,
       description: event.description || "",
-      date: event.date,
-      importance: event.importance,
+      date: event.date || "",
+      importance: event.importance || 3,
       tags: event.tags?.join(', ') || "",
       relatedCharacters: event.relatedCharacters?.join(', ') || "",
       relatedLocations: event.relatedLocations?.join(', ') || ""
@@ -272,7 +259,7 @@ export default function Timeline() {
   const filteredEvents = events.filter((event: TimelineEvent) => {
     const matchesSearch = event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       event.description?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesImportance = filterImportance === "all" || event.importance.toString() === filterImportance;
+    const matchesImportance = filterImportance === "all" || (event.importance || 3).toString() === filterImportance;
     return matchesSearch && matchesImportance;
   });
 
@@ -423,7 +410,7 @@ export default function Timeline() {
           ) : (
             <div className="space-y-6">
               {sortedYears.map((year) => {
-                const yearEvents = groupedEvents[year].sort((a, b) => b.importance - a.importance);
+                const yearEvents = groupedEvents[year].sort((a, b) => (b.importance || 3) - (a.importance || 3));
                 const isExpanded = expandedYears.has(year);
                 
                 return (
@@ -456,7 +443,7 @@ export default function Timeline() {
                           <div className="absolute left-6 top-0 bottom-0 w-px bg-border"></div>
                           <div className="space-y-6">
                             {yearEvents.map((event, index) => {
-                              const importanceInfo = getImportanceInfo(event.importance);
+                              const importanceInfo = getImportanceInfo(event.importance || 3);
                               
                               return (
                                 <div key={event.id} className="relative flex space-x-4" data-testid={`card-event-${event.id}`}>

@@ -24,6 +24,7 @@ import {
   Activity,
   BarChart3
 } from "lucide-react";
+import { Project, AiGeneration } from "@shared/schema";
 
 interface SubscriptionData {
   plan: string;
@@ -58,13 +59,13 @@ export default function Subscription() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  const { data: projects = [] } = useQuery({
+  const { data: projects = [] } = useQuery<Project[]>({
     queryKey: ['/api/projects'],
     enabled: isAuthenticated,
     retry: false,
   });
 
-  const { data: aiGenerations = [] } = useQuery({
+  const { data: aiGenerations = [] } = useQuery<AiGeneration[]>({
     queryKey: ['/api/ai/history'],
     enabled: isAuthenticated,
     retry: false,

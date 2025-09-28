@@ -26,9 +26,7 @@ function getStripeClient(): Stripe {
     if (!process.env.STRIPE_SECRET_KEY) {
       throw new Error('Stripe API key is not configured. Please set the STRIPE_SECRET_KEY environment variable.');
     }
-    stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-      apiVersion: "2023-10-16",
-    });
+    stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
   }
   return stripe;
 }
@@ -668,7 +666,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.send({
         subscriptionId: subscription.id,
-        clientSecret: subscription.latest_invoice?.payment_intent?.client_secret,
+        clientSecret: subscription.latest_invoice && typeof subscription.latest_invoice === 'object' && 'payment_intent' in subscription.latest_invoice && subscription.latest_invoice.payment_intent && typeof subscription.latest_invoice.payment_intent === 'object' && 'client_secret' in subscription.latest_invoice.payment_intent ? subscription.latest_invoice.payment_intent.client_secret : undefined,
       });
 
       return;
@@ -700,7 +698,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
       res.send({
         subscriptionId: subscription.id,
-        clientSecret: subscription.latest_invoice?.payment_intent?.client_secret,
+        clientSecret: subscription.latest_invoice && typeof subscription.latest_invoice === 'object' && 'payment_intent' in subscription.latest_invoice && subscription.latest_invoice.payment_intent && typeof subscription.latest_invoice.payment_intent === 'object' && 'client_secret' in subscription.latest_invoice.payment_intent ? subscription.latest_invoice.payment_intent.client_secret : undefined,
       });
     } catch (error: any) {
       return res.status(400).send({ error: { message: error.message } });
