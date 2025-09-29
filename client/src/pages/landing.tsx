@@ -94,7 +94,7 @@ export default function Landing() {
               </div>
             </div>
             <h1 className="text-5xl sm:text-6xl font-bold text-foreground mb-6">
-              WriteCraft <span className="text-accent">Pro</span>
+              <span className="text-accent">88Away</span>
             </h1>
             <p className="text-xl text-muted-foreground mb-8 max-w-3xl mx-auto">
               The professional writing platform that combines story bible management, 
@@ -312,7 +312,7 @@ export default function Landing() {
             Ready to transform your writing process?
           </h2>
           <p className="text-lg text-muted-foreground mb-8">
-            Join thousands of authors who trust WriteCraft Pro to bring their stories to life.
+            Join thousands of authors who trust 88Away to bring their stories to life.
           </p>
           <Button 
             size="lg" 
@@ -334,10 +334,10 @@ export default function Landing() {
               <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center mr-3">
                 <Edit3 className="h-4 w-4 text-accent-foreground" />
               </div>
-              <h3 className="text-xl font-semibold">WriteCraft Pro</h3>
+              <h3 className="text-xl font-semibold">88Away</h3>
             </div>
             <p className="text-primary-foreground/70 text-sm">
-              © 2024 WriteCraft Pro. All rights reserved. Professional writing platform for modern authors.
+              © 2024 88Away. All rights reserved. Professional writing platform for modern authors.
             </p>
           </div>
         </div>

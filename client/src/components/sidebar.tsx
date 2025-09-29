@@ -138,7 +138,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, currentPath }: Si
             </div>
             {!collapsed && (
               <div>
-                <h1 className="text-lg font-semibold">WriteCraft Pro</h1>
+                <h1 className="text-lg font-semibold">88Away</h1>
               </div>
             )}
           </div>
