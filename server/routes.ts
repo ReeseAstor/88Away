@@ -29,7 +29,13 @@ import {
   insertTimelineEventSchema,
   insertDocumentSchema,
   insertProjectCollaboratorSchema,
+  insertDocumentBranchSchema,
+  insertDocumentVersionSchema,
+  insertBranchMergeEventSchema,
 } from "@shared/schema";
+import { z } from "zod";
+import * as Y from 'yjs';
+import { CollaborationService } from "./collaboration";
 
 let stripe: Stripe | null = null;
 
@@ -484,6 +490,756 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating document:", error);
       res.status(500).json({ message: "Failed to update document" });
+    }
+  });
+
+  // ==================== BRANCH MANAGEMENT ENDPOINTS ====================
+
+  // GET /api/documents/:id/branches - List all branches for a document
+  app.get('/api/documents/:id/branches', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const document = await storage.getDocument(req.params.id);
+      
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      const project = await storage.getProject(document.projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const userRole = project.ownerId === userId ? 'owner' : await storage.getUserRole(document.projectId, userId);
+      
+      // Reader role has no access to version control features
+      if (!userRole || userRole === 'reader') {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const branches = await storage.getBranches(req.params.id);
+      
+      // Include branch head version and metadata for each branch
+      const branchesWithMetadata = await Promise.all(
+        branches.map(async (branch) => {
+          const headVersion = await storage.getBranchHead(branch.id);
+          return {
+            ...branch,
+            headVersion: headVersion ? {
+              id: headVersion.id,
+              wordCount: headVersion.wordCount,
+              createdAt: headVersion.createdAt,
+              authorId: headVersion.authorId
+            } : null,
+          };
+        })
+      );
+
+      res.json(branchesWithMetadata);
+    } catch (error) {
+      console.error("Error fetching branches:", error);
+      res.status(500).json({ message: "Failed to fetch branches" });
+    }
+  });
+
+  // POST /api/documents/:id/branches - Create new branch
+  app.post('/api/documents/:id/branches', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const document = await storage.getDocument(req.params.id);
+      
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      const project = await storage.getProject(document.projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const userRole = project.ownerId === userId ? 'owner' : await storage.getUserRole(document.projectId, userId);
+      
+      // Only owner and editor can create branches
+      if (!userRole || (userRole !== 'owner' && userRole !== 'editor')) {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+
+      const branchSchema = z.object({
+        name: z.string(),
+        description: z.string().nullable().optional(),
+        parentBranchId: z.string().nullable().optional(),
+      });
+
+      const validatedData = branchSchema.parse(req.body);
+      
+      const branch = await storage.createBranch(
+        req.params.id,
+        validatedData.name,
+        validatedData.description || null,
+        validatedData.parentBranchId || null,
+        userId
+      );
+
+      res.status(201).json(branch);
+    } catch (error) {
+      console.error("Error creating branch:", error);
+      res.status(500).json({ message: "Failed to create branch" });
+    }
+  });
+
+  // PUT /api/branches/:branchId - Update branch metadata
+  app.put('/api/branches/:branchId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const branch = await storage.getBranch(req.params.branchId);
+      
+      if (!branch) {
+        return res.status(404).json({ message: "Branch not found" });
+      }
+
+      const document = await storage.getDocument(branch.documentId);
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      const project = await storage.getProject(document.projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const userRole = project.ownerId === userId ? 'owner' : await storage.getUserRole(document.projectId, userId);
+      
+      // Only owner and editor can update branches
+      if (!userRole || (userRole !== 'owner' && userRole !== 'editor')) {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+
+      const validatedData = insertDocumentBranchSchema.partial().parse(req.body);
+      const updated = await storage.updateBranch(req.params.branchId, validatedData);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating branch:", error);
+      res.status(500).json({ message: "Failed to update branch" });
+    }
+  });
+
+  // DELETE /api/branches/:branchId - Delete branch (owner/editor only)
+  app.delete('/api/branches/:branchId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const branch = await storage.getBranch(req.params.branchId);
+      
+      if (!branch) {
+        return res.status(404).json({ message: "Branch not found" });
+      }
+
+      // Prevent deletion of main branch
+      if (branch.name === 'main') {
+        return res.status(400).json({ message: "Cannot delete main branch" });
+      }
+
+      const document = await storage.getDocument(branch.documentId);
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      const project = await storage.getProject(document.projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const userRole = project.ownerId === userId ? 'owner' : await storage.getUserRole(document.projectId, userId);
+      
+      // Only owner and editor can delete branches
+      if (!userRole || (userRole !== 'owner' && userRole !== 'editor')) {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+
+      await storage.deleteBranch(req.params.branchId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting branch:", error);
+      res.status(500).json({ message: "Failed to delete branch" });
+    }
+  });
+
+  // POST /api/documents/:id/branches/switch - Switch active branch for user session
+  app.post('/api/documents/:id/branches/switch', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const document = await storage.getDocument(req.params.id);
+      
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      const project = await storage.getProject(document.projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const userRole = project.ownerId === userId ? 'owner' : await storage.getUserRole(document.projectId, userId);
+      
+      // Reader role has no access to version control features
+      if (!userRole || userRole === 'reader') {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const switchSchema = z.object({
+        branchId: z.string(),
+      });
+
+      const { branchId } = switchSchema.parse(req.body);
+      
+      const branch = await storage.getBranch(branchId);
+      if (!branch || branch.documentId !== req.params.id) {
+        return res.status(404).json({ message: "Branch not found" });
+      }
+
+      // Store active branch in session
+      if (!req.session) {
+        req.session = {};
+      }
+      if (!req.session.activeBranches) {
+        req.session.activeBranches = {};
+      }
+      req.session.activeBranches[req.params.id] = branchId;
+
+      // Update collaboration context if user is in a collaboration session
+      const collaborationService = CollaborationService.getInstance();
+      // Note: This would need to be implemented in CollaborationService
+      // collaborationService.updateUserBranch(userId, document.projectId, req.params.id, branchId);
+
+      res.json({ 
+        success: true, 
+        activeBranch: branch,
+        message: "Active branch switched successfully" 
+      });
+      
+      // Set header for active branch
+      res.setHeader('X-Active-Branch', branchId);
+    } catch (error) {
+      console.error("Error switching branch:", error);
+      res.status(500).json({ message: "Failed to switch branch" });
+    }
+  });
+
+  // ==================== VERSION OPERATIONS ENDPOINTS ====================
+
+  // GET /api/branches/:branchId/versions - List versions in a branch
+  app.get('/api/branches/:branchId/versions', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const branch = await storage.getBranch(req.params.branchId);
+      
+      if (!branch) {
+        return res.status(404).json({ message: "Branch not found" });
+      }
+
+      const document = await storage.getDocument(branch.documentId);
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      const project = await storage.getProject(document.projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const userRole = project.ownerId === userId ? 'owner' : await storage.getUserRole(document.projectId, userId);
+      
+      // Reader role has no access to version control features
+      if (!userRole || userRole === 'reader') {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const limit = req.query.limit ? parseInt(req.query.limit) : undefined;
+      const versions = await storage.getBranchVersions(req.params.branchId, limit);
+      
+      res.json(versions);
+    } catch (error) {
+      console.error("Error fetching versions:", error);
+      res.status(500).json({ message: "Failed to fetch versions" });
+    }
+  });
+
+  // GET /api/versions/:versionId - Get specific version details
+  app.get('/api/versions/:versionId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const version = await storage.getVersion(req.params.versionId);
+      
+      if (!version) {
+        return res.status(404).json({ message: "Version not found" });
+      }
+
+      const document = await storage.getDocument(version.documentId);
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      const project = await storage.getProject(document.projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const userRole = project.ownerId === userId ? 'owner' : await storage.getUserRole(document.projectId, userId);
+      
+      // Reader role has no access to version control features
+      if (!userRole || userRole === 'reader') {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      res.json(version);
+    } catch (error) {
+      console.error("Error fetching version:", error);
+      res.status(500).json({ message: "Failed to fetch version" });
+    }
+  });
+
+  // POST /api/branches/:branchId/rollback - Rollback branch to specific version
+  app.post('/api/branches/:branchId/rollback', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const branch = await storage.getBranch(req.params.branchId);
+      
+      if (!branch) {
+        return res.status(404).json({ message: "Branch not found" });
+      }
+
+      const document = await storage.getDocument(branch.documentId);
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      const project = await storage.getProject(document.projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const userRole = project.ownerId === userId ? 'owner' : await storage.getUserRole(document.projectId, userId);
+      
+      // Only owner and editor can rollback
+      if (!userRole || (userRole !== 'owner' && userRole !== 'editor')) {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+
+      const rollbackSchema = z.object({
+        targetVersionId: z.string(),
+      });
+
+      const { targetVersionId } = rollbackSchema.parse(req.body);
+      
+      const targetVersion = await storage.getVersion(targetVersionId);
+      if (!targetVersion || targetVersion.branchId !== req.params.branchId) {
+        return res.status(404).json({ message: "Target version not found in this branch" });
+      }
+
+      const newVersion = await storage.rollbackBranch(req.params.branchId, targetVersionId, userId);
+      
+      // Invalidate cache for this document
+      await storage.clearAnalysisCache(document.projectId);
+
+      res.json({
+        success: true,
+        newVersion,
+        message: `Branch rolled back to version ${targetVersionId}`
+      });
+    } catch (error) {
+      console.error("Error rolling back branch:", error);
+      res.status(500).json({ message: "Failed to rollback branch" });
+    }
+  });
+
+  // GET /api/branches/:branchId/diff - Compare branch with another branch or version
+  app.get('/api/branches/:branchId/diff', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const branch = await storage.getBranch(req.params.branchId);
+      
+      if (!branch) {
+        return res.status(404).json({ message: "Branch not found" });
+      }
+
+      const document = await storage.getDocument(branch.documentId);
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      const project = await storage.getProject(document.projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const userRole = project.ownerId === userId ? 'owner' : await storage.getUserRole(document.projectId, userId);
+      
+      // Reader role has no access to version control features
+      if (!userRole || userRole === 'reader') {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const { compareToBranchId, compareToVersionId } = req.query;
+      
+      if (!compareToBranchId && !compareToVersionId) {
+        return res.status(400).json({ message: "Must provide either compareToBranchId or compareToVersionId" });
+      }
+
+      let sourceVersion = await storage.getBranchHead(req.params.branchId);
+      let targetVersion: any = null;
+
+      if (compareToVersionId) {
+        targetVersion = await storage.getVersion(compareToVersionId as string);
+        if (!targetVersion) {
+          return res.status(404).json({ message: "Compare version not found" });
+        }
+      } else if (compareToBranchId) {
+        const compareBranch = await storage.getBranch(compareToBranchId as string);
+        if (!compareBranch || compareBranch.documentId !== branch.documentId) {
+          return res.status(404).json({ message: "Compare branch not found" });
+        }
+        targetVersion = await storage.getBranchHead(compareToBranchId as string);
+      }
+
+      if (!sourceVersion || !targetVersion) {
+        return res.status(404).json({ message: "No versions to compare" });
+      }
+
+      // Compare Yjs states if available
+      let stateDiff = null;
+      if (sourceVersion.ydocState && targetVersion.ydocState) {
+        try {
+          const sourceDoc = new Y.Doc();
+          const targetDoc = new Y.Doc();
+          
+          // Apply states to documents
+          Y.applyUpdate(sourceDoc, Buffer.from(sourceVersion.ydocState, 'base64'));
+          Y.applyUpdate(targetDoc, Buffer.from(targetVersion.ydocState, 'base64'));
+          
+          // Get text content for comparison
+          const sourceText = sourceDoc.getText('content').toString();
+          const targetText = targetDoc.getText('content').toString();
+          
+          stateDiff = {
+            source: sourceText,
+            target: targetText,
+            hasConflicts: sourceText !== targetText
+          };
+        } catch (error) {
+          console.error("Error comparing Yjs states:", error);
+        }
+      }
+
+      res.json({
+        sourceBranch: branch,
+        sourceVersion: sourceVersion,
+        targetVersion: targetVersion,
+        diff: {
+          contentChanged: sourceVersion.content !== targetVersion.content,
+          wordCountDiff: (sourceVersion.wordCount || 0) - (targetVersion.wordCount || 0),
+          stateDiff,
+        }
+      });
+    } catch (error) {
+      console.error("Error comparing branches:", error);
+      res.status(500).json({ message: "Failed to compare branches" });
+    }
+  });
+
+  // ==================== MERGE OPERATIONS ENDPOINTS ====================
+
+  // POST /api/branches/:branchId/merge - Initiate merge from source to target branch
+  app.post('/api/branches/:branchId/merge', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const sourceBranch = await storage.getBranch(req.params.branchId);
+      
+      if (!sourceBranch) {
+        return res.status(404).json({ message: "Source branch not found" });
+      }
+
+      const document = await storage.getDocument(sourceBranch.documentId);
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      const project = await storage.getProject(document.projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const userRole = project.ownerId === userId ? 'owner' : await storage.getUserRole(document.projectId, userId);
+      
+      // Only owner and editor can merge
+      if (!userRole || (userRole !== 'owner' && userRole !== 'editor')) {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+
+      const mergeSchema = z.object({
+        targetBranchId: z.string(),
+      });
+
+      const { targetBranchId } = mergeSchema.parse(req.body);
+      
+      const targetBranch = await storage.getBranch(targetBranchId);
+      if (!targetBranch || targetBranch.documentId !== sourceBranch.documentId) {
+        return res.status(404).json({ message: "Target branch not found" });
+      }
+
+      // Find common ancestor
+      const commonAncestor = await storage.findCommonAncestor(req.params.branchId, targetBranchId);
+      
+      // Get head versions
+      const sourceHead = await storage.getBranchHead(req.params.branchId);
+      const targetHead = await storage.getBranchHead(targetBranchId);
+
+      if (!sourceHead || !targetHead) {
+        return res.status(400).json({ message: "Cannot merge: branches have no versions" });
+      }
+
+      // Create merge event
+      const mergeEvent = await storage.createMergeEvent(req.params.branchId, targetBranchId, userId);
+
+      // Detect conflicts
+      let hasConflicts = false;
+      let conflictData = null;
+
+      if (sourceHead.ydocState && targetHead.ydocState && commonAncestor?.ydocState) {
+        try {
+          const sourceDoc = new Y.Doc();
+          const targetDoc = new Y.Doc();
+          const ancestorDoc = new Y.Doc();
+          
+          Y.applyUpdate(sourceDoc, Buffer.from(sourceHead.ydocState, 'base64'));
+          Y.applyUpdate(targetDoc, Buffer.from(targetHead.ydocState, 'base64'));
+          Y.applyUpdate(ancestorDoc, Buffer.from(commonAncestor.ydocState, 'base64'));
+          
+          const sourceText = sourceDoc.getText('content').toString();
+          const targetText = targetDoc.getText('content').toString();
+          const ancestorText = ancestorDoc.getText('content').toString();
+          
+          // Simple conflict detection: both changed from ancestor
+          if (sourceText !== ancestorText && targetText !== ancestorText) {
+            hasConflicts = true;
+            conflictData = {
+              source: sourceText,
+              target: targetText,
+              ancestor: ancestorText,
+              conflictMarkers: [
+                {
+                  type: 'content_conflict',
+                  sourceContent: sourceText,
+                  targetContent: targetText,
+                  ancestorContent: ancestorText,
+                }
+              ]
+            };
+          }
+        } catch (error) {
+          console.error("Error detecting conflicts:", error);
+        }
+      } else {
+        // Fallback to simple content comparison
+        if (sourceHead.content !== targetHead.content) {
+          hasConflicts = true;
+          conflictData = {
+            source: sourceHead.content,
+            target: targetHead.content,
+            ancestor: commonAncestor?.content || '',
+            conflictMarkers: [
+              {
+                type: 'content_conflict',
+                sourceContent: sourceHead.content,
+                targetContent: targetHead.content,
+              }
+            ]
+          };
+        }
+      }
+
+      // Update merge event with conflict status
+      const status = hasConflicts ? 'conflicted' : 'completed';
+      await storage.updateMergeEvent(mergeEvent.id, status, conflictData);
+
+      // If no conflicts, automatically merge
+      if (!hasConflicts) {
+        // Create new version in target branch with merged content
+        const mergedVersion = await storage.createBranchVersion(
+          targetBranchId,
+          sourceHead.content,
+          sourceHead.ydocState,
+          userId,
+          sourceHead.wordCount
+        );
+
+        await storage.updateMergeEvent(mergeEvent.id, 'completed', {
+          mergedVersionId: mergedVersion.id,
+          ...conflictData
+        });
+      }
+
+      res.status(201).json({
+        mergeEvent,
+        hasConflicts,
+        conflictData,
+        sourceBranch,
+        targetBranch,
+        commonAncestor: commonAncestor ? {
+          id: commonAncestor.id,
+          createdAt: commonAncestor.createdAt,
+        } : null,
+      });
+    } catch (error) {
+      console.error("Error initiating merge:", error);
+      res.status(500).json({ message: "Failed to initiate merge" });
+    }
+  });
+
+  // GET /api/merge-events/:mergeEventId - Get merge status and conflicts
+  app.get('/api/merge-events/:mergeEventId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const mergeEvents = await storage.getMergeEvents(''); // We need to fetch all and filter
+      const mergeEvent = mergeEvents.find(e => e.id === req.params.mergeEventId);
+      
+      if (!mergeEvent) {
+        return res.status(404).json({ message: "Merge event not found" });
+      }
+
+      // Get document and check permissions
+      const document = await storage.getDocument(mergeEvent.documentId);
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      const project = await storage.getProject(document.projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const userRole = project.ownerId === userId ? 'owner' : await storage.getUserRole(document.projectId, userId);
+      
+      // Reader role has no access to version control features
+      if (!userRole || userRole === 'reader') {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      res.json(mergeEvent);
+    } catch (error) {
+      console.error("Error fetching merge event:", error);
+      res.status(500).json({ message: "Failed to fetch merge event" });
+    }
+  });
+
+  // PATCH /api/merge-events/:mergeEventId/resolve - Resolve merge conflicts
+  app.patch('/api/merge-events/:mergeEventId/resolve', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const mergeEvents = await storage.getMergeEvents(''); // We need to fetch all and filter
+      const mergeEvent = mergeEvents.find(e => e.id === req.params.mergeEventId);
+      
+      if (!mergeEvent) {
+        return res.status(404).json({ message: "Merge event not found" });
+      }
+
+      if (mergeEvent.status !== 'conflicted') {
+        return res.status(400).json({ message: "Merge event has no conflicts to resolve" });
+      }
+
+      // Get document and check permissions
+      const document = await storage.getDocument(mergeEvent.documentId);
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      const project = await storage.getProject(document.projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const userRole = project.ownerId === userId ? 'owner' : await storage.getUserRole(document.projectId, userId);
+      
+      // Only owner and editor can resolve conflicts
+      if (!userRole || (userRole !== 'owner' && userRole !== 'editor')) {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+
+      const resolveSchema = z.object({
+        resolvedContent: z.string(),
+        resolvedYdocState: z.string().nullable().optional(),
+        wordCount: z.number().optional(),
+      });
+
+      const validatedData = resolveSchema.parse(req.body);
+      
+      // Create merged version in target branch
+      const mergedVersion = await storage.createBranchVersion(
+        mergeEvent.targetBranchId,
+        validatedData.resolvedContent,
+        validatedData.resolvedYdocState || null,
+        userId,
+        validatedData.wordCount
+      );
+
+      // Update merge event as completed
+      await storage.updateMergeEvent(req.params.mergeEventId, 'completed', {
+        ...(mergeEvent.metadata as any),
+        mergedVersionId: mergedVersion.id,
+        resolvedBy: userId,
+        resolvedAt: new Date(),
+      });
+
+      res.json({
+        success: true,
+        mergedVersion,
+        message: "Merge conflicts resolved successfully"
+      });
+    } catch (error) {
+      console.error("Error resolving merge conflicts:", error);
+      res.status(500).json({ message: "Failed to resolve merge conflicts" });
+    }
+  });
+
+  // GET /api/documents/:id/merge-history - Get document merge history
+  app.get('/api/documents/:id/merge-history', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const document = await storage.getDocument(req.params.id);
+      
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      const project = await storage.getProject(document.projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const userRole = project.ownerId === userId ? 'owner' : await storage.getUserRole(document.projectId, userId);
+      
+      // Reader role has no access to version control features
+      if (!userRole || userRole === 'reader') {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const mergeEvents = await storage.getMergeEvents(req.params.id);
+      
+      // Enrich merge events with branch information
+      const enrichedEvents = await Promise.all(
+        mergeEvents.map(async (event) => {
+          const sourceBranch = await storage.getBranch(event.sourceBranchId);
+          const targetBranch = await storage.getBranch(event.targetBranchId);
+          return {
+            ...event,
+            sourceBranch: sourceBranch ? { id: sourceBranch.id, name: sourceBranch.name } : null,
+            targetBranch: targetBranch ? { id: targetBranch.id, name: targetBranch.name } : null,
+          };
+        })
+      );
+
+      res.json(enrichedEvents);
+    } catch (error) {
+      console.error("Error fetching merge history:", error);
+      res.status(500).json({ message: "Failed to fetch merge history" });
     }
   });
 
