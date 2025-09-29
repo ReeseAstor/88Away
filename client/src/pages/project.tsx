@@ -32,7 +32,8 @@ import {
   Edit3,
   Save,
   Eye,
-  Calendar
+  Calendar,
+  BarChart3
 } from "lucide-react";
 import { Project as ProjectType, Document, ProjectWithCollaborators, Character } from "@shared/schema";
 
@@ -322,6 +323,16 @@ export default function Project() {
               <Button variant="outline" size="sm" data-testid="button-share">
                 <Share2 className="mr-2 h-4 w-4" />
                 Share
+              </Button>
+
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => window.location.href = `/projects/${id}/analytics`}
+                data-testid="button-analytics"
+              >
+                <BarChart3 className="mr-2 h-4 w-4" />
+                Analytics
               </Button>
               
               <ExportMenu 
