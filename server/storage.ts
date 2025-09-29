@@ -7,6 +7,8 @@ import {
   timelineEvents,
   documents,
   documentVersions,
+  documentBranches,
+  branchMergeEvents,
   projectCollaborators,
   aiGenerations,
   documentCollaborationStates,
@@ -25,11 +27,17 @@ import {
   type Document,
   type InsertDocument,
   type DocumentVersion,
+  type InsertDocumentVersion,
+  type DocumentBranch,
+  type InsertDocumentBranch,
+  type BranchMergeEvent,
+  type InsertBranchMergeEvent,
   type ProjectCollaborator,
   type InsertProjectCollaborator,
   type AiGeneration,
   type ProjectWithCollaborators,
   type DocumentWithVersions,
+  type DocumentBranchWithVersions,
   type DocumentCollaborationState,
   type DocumentComment,
   type InsertDocumentComment,
@@ -119,6 +127,26 @@ export interface IStorage {
   updatePresence(projectId: string, userId: string, documentId: string | null, status: 'online' | 'offline' | 'away', cursorPos?: { line: number; column: number }, color?: string): Promise<CollaborationPresence>;
   getProjectPresence(projectId: string): Promise<CollaborationPresence[]>;
   cleanupStalePresence(): Promise<void>;
+
+  // Branch operations
+  createBranch(documentId: string, name: string, description: string | null, parentBranchId: string | null, userId: string): Promise<DocumentBranch>;
+  getBranches(documentId: string): Promise<DocumentBranch[]>;
+  getBranch(branchId: string): Promise<DocumentBranch | undefined>;
+  updateBranch(branchId: string, updates: Partial<InsertDocumentBranch>): Promise<DocumentBranch>;
+  deleteBranch(branchId: string): Promise<void>;
+  getBranchHead(branchId: string): Promise<DocumentVersion | undefined>;
+
+  // Version operations
+  createBranchVersion(branchId: string, content: string, ydocState: string | null, userId: string, wordCount?: number): Promise<DocumentVersion>;
+  getBranchVersions(branchId: string, limit?: number): Promise<DocumentVersion[]>;
+  getVersion(versionId: string): Promise<DocumentVersion | undefined>;
+  rollbackBranch(branchId: string, targetVersionId: string, userId: string): Promise<DocumentVersion>;
+
+  // Merge operations
+  createMergeEvent(sourceBranchId: string, targetBranchId: string, userId: string): Promise<BranchMergeEvent>;
+  updateMergeEvent(mergeEventId: string, status: 'pending' | 'completed' | 'failed' | 'conflicted', metadata?: any): Promise<BranchMergeEvent>;
+  getMergeEvents(documentId: string): Promise<BranchMergeEvent[]>;
+  findCommonAncestor(branch1Id: string, branch2Id: string): Promise<DocumentVersion | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -758,6 +786,282 @@ export class DatabaseStorage implements IStorage {
       '#98D8C8', // Mint
     ];
     return colors[Math.floor(Math.random() * colors.length)];
+  }
+
+  // Branch operations
+  async createBranch(
+    documentId: string, 
+    name: string, 
+    description: string | null, 
+    parentBranchId: string | null, 
+    userId: string
+  ): Promise<DocumentBranch> {
+    // Verify document exists and user has access
+    const document = await this.getDocument(documentId);
+    if (!document) {
+      throw new Error("Document not found");
+    }
+    
+    const hasAccess = await this.checkProjectAccess(document.projectId, userId);
+    if (!hasAccess) {
+      throw new Error("User does not have access to this project");
+    }
+
+    // Generate slug from name
+    const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    
+    // Get base version ID if this is a child branch
+    let baseVersionId: string | null = null;
+    if (parentBranchId) {
+      const parentBranch = await this.getBranchHead(parentBranchId);
+      if (parentBranch) {
+        baseVersionId = parentBranch.id;
+      }
+    }
+
+    const [branch] = await db
+      .insert(documentBranches)
+      .values({
+        documentId,
+        name,
+        slug,
+        description,
+        parentBranchId,
+        baseVersionId,
+        createdBy: userId,
+      })
+      .returning();
+
+    return branch;
+  }
+
+  async getBranches(documentId: string): Promise<DocumentBranch[]> {
+    return await db
+      .select()
+      .from(documentBranches)
+      .where(eq(documentBranches.documentId, documentId))
+      .orderBy(desc(documentBranches.createdAt));
+  }
+
+  async getBranch(branchId: string): Promise<DocumentBranch | undefined> {
+    const [branch] = await db
+      .select()
+      .from(documentBranches)
+      .where(eq(documentBranches.id, branchId));
+    return branch;
+  }
+
+  async updateBranch(branchId: string, updates: Partial<InsertDocumentBranch>): Promise<DocumentBranch> {
+    const [updated] = await db
+      .update(documentBranches)
+      .set({
+        ...updates,
+        updatedAt: new Date(),
+      })
+      .where(eq(documentBranches.id, branchId))
+      .returning();
+    
+    if (!updated) {
+      throw new Error("Branch not found");
+    }
+    
+    return updated;
+  }
+
+  async deleteBranch(branchId: string): Promise<void> {
+    await db
+      .delete(documentBranches)
+      .where(eq(documentBranches.id, branchId));
+  }
+
+  async getBranchHead(branchId: string): Promise<DocumentVersion | undefined> {
+    const [latestVersion] = await db
+      .select()
+      .from(documentVersions)
+      .where(eq(documentVersions.branchId, branchId))
+      .orderBy(desc(documentVersions.createdAt))
+      .limit(1);
+    
+    return latestVersion;
+  }
+
+  // Version operations
+  async createBranchVersion(
+    branchId: string, 
+    content: string, 
+    ydocState: string | null, 
+    userId: string,
+    wordCount: number = 0
+  ): Promise<DocumentVersion> {
+    // Get branch to verify it exists and get documentId
+    const branch = await this.getBranch(branchId);
+    if (!branch) {
+      throw new Error("Branch not found");
+    }
+
+    // Get previous version to set as parent
+    const previousVersion = await this.getBranchHead(branchId);
+    
+    const [version] = await db
+      .insert(documentVersions)
+      .values({
+        documentId: branch.documentId,
+        branchId,
+        parentVersionId: previousVersion?.id || null,
+        content,
+        ydocState,
+        wordCount,
+        authorId: userId,
+      })
+      .returning();
+
+    return version;
+  }
+
+  async getBranchVersions(branchId: string, limit: number = 50): Promise<DocumentVersion[]> {
+    return await db
+      .select()
+      .from(documentVersions)
+      .where(eq(documentVersions.branchId, branchId))
+      .orderBy(desc(documentVersions.createdAt))
+      .limit(limit);
+  }
+
+  async getVersion(versionId: string): Promise<DocumentVersion | undefined> {
+    const [version] = await db
+      .select()
+      .from(documentVersions)
+      .where(eq(documentVersions.id, versionId));
+    return version;
+  }
+
+  async rollbackBranch(branchId: string, targetVersionId: string, userId: string): Promise<DocumentVersion> {
+    // Get the target version to rollback to
+    const targetVersion = await this.getVersion(targetVersionId);
+    if (!targetVersion || targetVersion.branchId !== branchId) {
+      throw new Error("Target version not found or does not belong to this branch");
+    }
+
+    // Create a new version with the content from the target version
+    return await this.createBranchVersion(
+      branchId,
+      targetVersion.content,
+      targetVersion.ydocState,
+      userId,
+      targetVersion.wordCount || 0
+    );
+  }
+
+  // Merge operations
+  async createMergeEvent(
+    sourceBranchId: string, 
+    targetBranchId: string, 
+    userId: string
+  ): Promise<BranchMergeEvent> {
+    // Verify both branches exist and get their document IDs
+    const [sourceBranch, targetBranch] = await Promise.all([
+      this.getBranch(sourceBranchId),
+      this.getBranch(targetBranchId)
+    ]);
+
+    if (!sourceBranch || !targetBranch) {
+      throw new Error("Source or target branch not found");
+    }
+
+    if (sourceBranch.documentId !== targetBranch.documentId) {
+      throw new Error("Branches belong to different documents");
+    }
+
+    const [mergeEvent] = await db
+      .insert(branchMergeEvents)
+      .values({
+        documentId: sourceBranch.documentId,
+        sourceBranchId,
+        targetBranchId,
+        initiatorId: userId,
+        status: 'pending',
+      })
+      .returning();
+
+    return mergeEvent;
+  }
+
+  async updateMergeEvent(
+    mergeEventId: string, 
+    status: 'pending' | 'completed' | 'failed' | 'conflicted',
+    metadata?: any
+  ): Promise<BranchMergeEvent> {
+    const updates: any = {
+      status,
+      metadata: metadata || null,
+    };
+
+    if (status !== 'pending') {
+      updates.resolvedAt = new Date();
+    }
+
+    const [updated] = await db
+      .update(branchMergeEvents)
+      .set(updates)
+      .where(eq(branchMergeEvents.id, mergeEventId))
+      .returning();
+
+    if (!updated) {
+      throw new Error("Merge event not found");
+    }
+
+    return updated;
+  }
+
+  async getMergeEvents(documentId: string): Promise<BranchMergeEvent[]> {
+    return await db
+      .select()
+      .from(branchMergeEvents)
+      .where(eq(branchMergeEvents.documentId, documentId))
+      .orderBy(desc(branchMergeEvents.createdAt));
+  }
+
+  async findCommonAncestor(branch1Id: string, branch2Id: string): Promise<DocumentVersion | undefined> {
+    // Get all versions from both branches
+    const [branch1Versions, branch2Versions] = await Promise.all([
+      this.getBranchVersions(branch1Id, 100),
+      this.getBranchVersions(branch2Id, 100)
+    ]);
+
+    // Create a set of version IDs and parent version IDs from branch1
+    const branch1VersionIds = new Set<string>();
+    const branch1ParentIds = new Set<string>();
+    
+    for (const version of branch1Versions) {
+      branch1VersionIds.add(version.id);
+      if (version.parentVersionId) {
+        branch1ParentIds.add(version.parentVersionId);
+      }
+    }
+
+    // Find the first version in branch2 that exists in branch1's history
+    for (const version of branch2Versions) {
+      if (branch1VersionIds.has(version.id)) {
+        return version;
+      }
+      if (version.parentVersionId && branch1VersionIds.has(version.parentVersionId)) {
+        return await this.getVersion(version.parentVersionId);
+      }
+    }
+
+    // Check if branches share a common base version through their parent branches
+    const [branch1, branch2] = await Promise.all([
+      this.getBranch(branch1Id),
+      this.getBranch(branch2Id)
+    ]);
+
+    if (branch1?.baseVersionId && branch2?.baseVersionId) {
+      if (branch1.baseVersionId === branch2.baseVersionId) {
+        return await this.getVersion(branch1.baseVersionId);
+      }
+    }
+
+    return undefined;
   }
 }
 
