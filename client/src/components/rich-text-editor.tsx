@@ -324,7 +324,6 @@ export default function RichTextEditor({
         
         {/* Editor Content */}
         <EditorContent 
-          ref={editorRef}
           editor={editor} 
           className={`min-h-[200px] ${readOnly || userRole === 'reader' ? 'opacity-75' : ''}`}
           data-testid="editor-content"
