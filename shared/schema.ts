@@ -122,14 +122,53 @@ export const documents = pgTable("documents", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Document versions for history tracking
+// Document branches for version control
+export const documentBranches = pgTable("document_branches", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  documentId: varchar("document_id").notNull().references(() => documents.id, { onDelete: 'cascade' }),
+  name: varchar("name").notNull(),
+  slug: varchar("slug").notNull(),
+  description: text("description"),
+  parentBranchId: varchar("parent_branch_id").references(() => documentBranches.id),
+  baseVersionId: varchar("base_version_id"),
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_document_branches_doc_name").on(table.documentId, table.name),
+]);
+
+// Document versions for history tracking (extended for branching)
 export const documentVersions = pgTable("document_versions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   documentId: varchar("document_id").notNull().references(() => documents.id, { onDelete: 'cascade' }),
+  branchId: varchar("branch_id").references(() => documentBranches.id, { onDelete: 'cascade' }),
+  parentVersionId: varchar("parent_version_id").references(() => documentVersions.id),
   content: text("content").notNull(),
+  ydocState: text("ydoc_state"),
+  wordCount: integer("word_count").default(0),
   changeDescription: text("change_description"),
   authorId: varchar("author_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_doc_versions_branch").on(table.documentId, table.branchId, table.createdAt),
+]);
+
+// Merge status enum
+export const mergeStatusEnum = pgEnum('merge_status', ['pending', 'completed', 'failed', 'conflicted']);
+
+// Branch merge events for tracking merge operations
+export const branchMergeEvents = pgTable("branch_merge_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  documentId: varchar("document_id").notNull().references(() => documents.id, { onDelete: 'cascade' }),
+  sourceBranchId: varchar("source_branch_id").notNull().references(() => documentBranches.id),
+  targetBranchId: varchar("target_branch_id").notNull().references(() => documentBranches.id),
+  mergedVersionId: varchar("merged_version_id").references(() => documentVersions.id),
+  initiatorId: varchar("initiator_id").notNull().references(() => users.id),
+  status: mergeStatusEnum("status").notNull().default('pending'),
+  createdAt: timestamp("created_at").defaultNow(),
+  resolvedAt: timestamp("resolved_at"),
+  metadata: jsonb("metadata"),
 });
 
 // AI generation history
@@ -209,11 +248,13 @@ export const usersRelations = relations(users, ({ many }) => ({
   collaborations: many(projectCollaborators),
   documents: many(documents),
   documentVersions: many(documentVersions),
+  documentBranches: many(documentBranches),
   documentComments: many(documentComments),
   aiGenerations: many(aiGenerations),
   writingSessions: many(writingSessions),
   activityLogs: many(activityLogs),
   collaborationPresence: many(collaborationPresence),
+  branchMergeEvents: many(branchMergeEvents),
 }));
 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
@@ -273,21 +314,76 @@ export const documentsRelations = relations(documents, ({ one, many }) => ({
     fields: [documents.authorId],
     references: [users.id],
   }),
+  branches: many(documentBranches),
   versions: many(documentVersions),
   comments: many(documentComments),
+  mergeEvents: many(branchMergeEvents),
   collaborationState: one(documentCollaborationStates, {
     fields: [documents.id],
     references: [documentCollaborationStates.documentId],
   }),
 }));
 
-export const documentVersionsRelations = relations(documentVersions, ({ one }) => ({
+// Document branches relations
+export const documentBranchesRelations = relations(documentBranches, ({ one, many }) => ({
+  document: one(documents, {
+    fields: [documentBranches.documentId],
+    references: [documents.id],
+  }),
+  createdBy: one(users, {
+    fields: [documentBranches.createdBy],
+    references: [users.id],
+  }),
+  parentBranch: one(documentBranches, {
+    fields: [documentBranches.parentBranchId],
+    references: [documentBranches.id],
+  }),
+  childBranches: many(documentBranches),
+  versions: many(documentVersions),
+  sourceMergeEvents: many(branchMergeEvents),
+  targetMergeEvents: many(branchMergeEvents),
+}));
+
+export const documentVersionsRelations = relations(documentVersions, ({ one, many }) => ({
   document: one(documents, {
     fields: [documentVersions.documentId],
     references: [documents.id],
   }),
+  branch: one(documentBranches, {
+    fields: [documentVersions.branchId],
+    references: [documentBranches.id],
+  }),
+  parentVersion: one(documentVersions, {
+    fields: [documentVersions.parentVersionId],
+    references: [documentVersions.id],
+  }),
+  childVersions: many(documentVersions),
   author: one(users, {
     fields: [documentVersions.authorId],
+    references: [users.id],
+  }),
+}));
+
+// Branch merge events relations
+export const branchMergeEventsRelations = relations(branchMergeEvents, ({ one }) => ({
+  document: one(documents, {
+    fields: [branchMergeEvents.documentId],
+    references: [documents.id],
+  }),
+  sourceBranch: one(documentBranches, {
+    fields: [branchMergeEvents.sourceBranchId],
+    references: [documentBranches.id],
+  }),
+  targetBranch: one(documentBranches, {
+    fields: [branchMergeEvents.targetBranchId],
+    references: [documentBranches.id],
+  }),
+  mergedVersion: one(documentVersions, {
+    fields: [branchMergeEvents.mergedVersionId],
+    references: [documentVersions.id],
+  }),
+  initiator: one(users, {
+    fields: [branchMergeEvents.initiatorId],
     references: [users.id],
   }),
 }));
@@ -431,6 +527,24 @@ export const insertCollaborationPresenceSchema = createInsertSchema(collaboratio
   lastSeen: true,
 });
 
+// Branching insert schemas
+export const insertDocumentBranchSchema = createInsertSchema(documentBranches).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertDocumentVersionSchema = createInsertSchema(documentVersions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertBranchMergeEventSchema = createInsertSchema(branchMergeEvents).omit({
+  id: true,
+  createdAt: true,
+  resolvedAt: true,
+});
+
 // Worldbuilding details interface
 export interface WorldbuildingDetails {
   content?: string;
@@ -451,6 +565,7 @@ export type TimelineEvent = typeof timelineEvents.$inferSelect;
 export type InsertDocument = z.infer<typeof insertDocumentSchema>;
 export type Document = typeof documents.$inferSelect;
 export type DocumentVersion = typeof documentVersions.$inferSelect;
+export type InsertDocumentVersion = z.infer<typeof insertDocumentVersionSchema>;
 export type InsertProjectCollaborator = z.infer<typeof insertProjectCollaboratorSchema>;
 export type ProjectCollaborator = typeof projectCollaborators.$inferSelect;
 export type AiGeneration = typeof aiGenerations.$inferSelect;
@@ -466,6 +581,12 @@ export type DocumentComment = typeof documentComments.$inferSelect;
 export type InsertCollaborationPresence = z.infer<typeof insertCollaborationPresenceSchema>;
 export type CollaborationPresence = typeof collaborationPresence.$inferSelect;
 
+// Branching types
+export type DocumentBranch = typeof documentBranches.$inferSelect;
+export type InsertDocumentBranch = z.infer<typeof insertDocumentBranchSchema>;
+export type BranchMergeEvent = typeof branchMergeEvents.$inferSelect;
+export type InsertBranchMergeEvent = z.infer<typeof insertBranchMergeEventSchema>;
+
 // Extended types with relations
 export type ProjectWithCollaborators = Project & {
   collaborators: (ProjectCollaborator & { user: User })[];
@@ -478,4 +599,14 @@ export type ProjectWithCollaborators = Project & {
 export type DocumentWithVersions = Document & {
   versions: DocumentVersion[];
   author: User;
+};
+
+export type DocumentBranchWithVersions = DocumentBranch & {
+  versions: DocumentVersion[];
+  document: Document;
+};
+
+export type BranchWithChildren = DocumentBranch & {
+  childBranches: DocumentBranch[];
+  parentBranch?: DocumentBranch | null;
 };
