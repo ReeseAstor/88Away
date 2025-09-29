@@ -8,8 +8,11 @@ import {
   Lightbulb, 
   Edit3, 
   FileText,
-  Check
+  Check,
+  Mail,
+  MapPin
 } from "lucide-react";
+import logo from "@/assets/88away-logo.png";
 
 export default function Landing() {
   const features = [
@@ -89,9 +92,7 @@ export default function Landing() {
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
           <div className="text-center">
             <div className="flex items-center justify-center mb-8">
-              <div className="w-16 h-16 bg-accent rounded-2xl flex items-center justify-center">
-                <Edit3 className="h-8 w-8 text-accent-foreground" />
-              </div>
+              <img src={logo} alt="88Away Logo" className="h-20 w-auto" />
             </div>
             <h1 className="text-5xl sm:text-6xl font-bold text-foreground mb-6">
               <span className="text-accent">88Away</span>
@@ -330,14 +331,26 @@ export default function Landing() {
       <footer className="bg-primary text-primary-foreground py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <div className="flex items-center justify-center mb-4">
-              <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center mr-3">
-                <Edit3 className="h-4 w-4 text-accent-foreground" />
-              </div>
-              <h3 className="text-xl font-semibold">88Away</h3>
+            <div className="flex items-center justify-center mb-6">
+              <img src={logo} alt="88Away Logo" className="h-12 w-auto brightness-0 invert opacity-90" />
             </div>
-            <p className="text-primary-foreground/70 text-sm">
-              © 2024 88Away. All rights reserved. Professional writing platform for modern authors.
+            <div className="space-y-2 mb-4">
+              <p className="text-primary-foreground/90 font-medium">88Away LLC</p>
+              <div className="flex items-center justify-center space-x-4 text-sm text-primary-foreground/70">
+                <div className="flex items-center">
+                  <MapPin className="h-3 w-3 mr-1" />
+                  <span>NYC</span>
+                </div>
+                <div className="flex items-center">
+                  <Mail className="h-3 w-3 mr-1" />
+                  <a href="mailto:info@88away.com" className="hover:text-primary-foreground/90 transition-colors">
+                    info@88away.com
+                  </a>
+                </div>
+              </div>
+            </div>
+            <p className="text-primary-foreground/60 text-xs">
+              © 2024 88Away LLC. All rights reserved. Professional writing platform for modern authors.
             </p>
           </div>
         </div>
