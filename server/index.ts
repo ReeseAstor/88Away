@@ -1,6 +1,10 @@
 import express, { type Request, Response, NextFunction } from "express";
+import { WebSocketServer } from 'ws';
+import { parse } from 'url';
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { CollaborationService } from "./collaboration";
+import { storage } from "./storage";
 
 const app = express();
 app.use(express.json());
@@ -67,5 +71,58 @@ app.use((req, res, next) => {
     reusePort: true,
   }, () => {
     log(`serving on port ${port}`);
+    
+    // Set up WebSocket server for collaboration on a specific path
+    const wss = new WebSocketServer({ 
+      server,
+      path: '/ws/collaboration'
+    });
+    const collaborationService = CollaborationService.getInstance();
+    
+    wss.on('connection', async (ws, req) => {
+      try {
+        // Parse query parameters from the URL
+        const fullUrl = `http://localhost${req.url}`;
+        const url = parse(fullUrl, true);
+        const documentId = url.query.documentId as string;
+        const projectId = url.query.projectId as string;
+        const sessionId = url.query.sessionId as string;
+        
+        if (!documentId || !projectId || !sessionId) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Missing required parameters' }));
+          ws.close();
+          return;
+        }
+        
+        // Verify session and get user
+        const session = await storage.getSession(sessionId);
+        if (!session || !session.sess || !session.sess.user) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Invalid session' }));
+          ws.close();
+          return;
+        }
+        
+        const user = await storage.getUser(session.sess.user.claims.sub);
+        if (!user) {
+          ws.send(JSON.stringify({ type: 'error', message: 'User not found' }));
+          ws.close();
+          return;
+        }
+        
+        // Handle connection with collaboration service
+        await collaborationService.handleConnection(ws, user, documentId, projectId);
+        
+      } catch (error) {
+        console.error('WebSocket connection error:', error);
+        ws.send(JSON.stringify({ type: 'error', message: 'Failed to establish connection' }));
+        ws.close();
+      }
+    });
+    
+    // Cleanup on shutdown
+    process.on('SIGTERM', () => {
+      collaborationService.destroy();
+      wss.close();
+    });
   });
 })();

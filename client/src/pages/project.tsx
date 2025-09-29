@@ -19,6 +19,17 @@ import RichTextEditor from "@/components/rich-text-editor";
 import AiAssistantModal from "@/components/ai-assistant-modal";
 import AdvancedAnalysisModal from "@/components/advanced-analysis-modal";
 import ExportMenu from "@/components/export-menu";
+import { CollaborationProvider, useCollaboration } from "@/components/collaboration-provider";
+import CommentSidebar from "@/components/comment-sidebar";
+import PresenceIndicator from "@/components/presence-indicator";
+import {
+  useDocumentComments,
+  useCreateComment,
+  useUpdateComment,
+  useDeleteComment,
+  useResolveComment,
+  useCommentSubscription
+} from "@/hooks/useComments";
 import { 
   BookOpen, 
   Users, 
@@ -35,18 +46,26 @@ import {
   Eye,
   Calendar,
   BarChart3,
-  Brain
+  Brain,
+  MessageSquare,
+  Circle
 } from "lucide-react";
-import { Project as ProjectType, Document, ProjectWithCollaborators, Character } from "@shared/schema";
+import { Project as ProjectType, Document, ProjectWithCollaborators, Character, DocumentComment as Comment } from "@shared/schema";
 
-export default function Project() {
+// Inner component that uses collaboration context
+function ProjectContent() {
   const { id } = useParams();
   const { user, isAuthenticated, isLoading } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  
+  // Collaboration context
+  const { ydoc, awareness, isConnected, onlineUsers, sendComment, userColor, userRole, xmlFragment } = useCollaboration();
+  
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showAiModal, setShowAiModal] = useState(false);
   const [showAdvancedAnalysisModal, setShowAdvancedAnalysisModal] = useState(false);
+  const [showCommentSidebar, setShowCommentSidebar] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<string | null>(null);
   const [documentContent, setDocumentContent] = useState("");
   const [activeTab, setActiveTab] = useState("overview");
@@ -99,6 +118,16 @@ export default function Project() {
     enabled: !!id && isAuthenticated,
     retry: false,
   });
+
+  // Comment hooks
+  const { data: comments = [] } = useDocumentComments(selectedDocument);
+  const createCommentMutation = useCreateComment(selectedDocument || '');
+  const updateCommentMutation = useUpdateComment(selectedDocument || '');
+  const deleteCommentMutation = useDeleteComment(selectedDocument || '');
+  const resolveCommentMutation = useResolveComment(selectedDocument || '');
+  
+  // Subscribe to real-time comment updates
+  useCommentSubscription(selectedDocument, isConnected);
 
   // Load document content when selected
   useEffect(() => {
@@ -252,6 +281,41 @@ export default function Project() {
     });
   };
 
+  // Handle comment actions
+  const handleAddComment = (content: string, range?: { start: number; end: number }) => {
+    if (selectedDocument) {
+      createCommentMutation.mutate({ content, range });
+    }
+  };
+
+  const handleUpdateComment = (commentId: string, content: string) => {
+    updateCommentMutation.mutate({ commentId, content });
+  };
+
+  const handleDeleteComment = (commentId: string) => {
+    deleteCommentMutation.mutate(commentId);
+  };
+
+  const handleResolveComment = (commentId: string) => {
+    resolveCommentMutation.mutate({ commentId, resolved: true });
+  };
+
+  const handleReplyToComment = (parentId: string, content: string) => {
+    if (selectedDocument) {
+      createCommentMutation.mutate({ content, parentId });
+    }
+  };
+
+  // Determine user's role in the project
+  const getUserRole = () => {
+    if (!project || !user) return null;
+    if (project.ownerId === user.id) return 'owner';
+    const collaborator = project.collaborators?.find(c => c.userId === user.id);
+    return collaborator?.role || userRole;
+  };
+
+  const currentUserRole = getUserRole();
+
   if (!isAuthenticated || isLoading || projectLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -307,425 +371,507 @@ export default function Project() {
                       <span>•</span>
                       <div className="flex items-center space-x-1">
                         <Calendar className="h-3 w-3" />
-                        <span>Due {new Date(project.deadline).toLocaleDateString()}</span>
+                        <span>
+                          Due {new Date(project.deadline).toLocaleDateString()}
+                        </span>
                       </div>
                     </>
                   )}
                 </div>
               </div>
             </div>
-            
-            <div className="flex items-center space-x-3">
-              {project.targetWordCount && (
-                <div className="flex items-center space-x-2">
-                  <Progress value={progress} className="w-20" />
-                  <span className="text-sm text-muted-foreground">{progress}%</span>
-                </div>
-              )}
-              
-              <Button variant="outline" size="sm" data-testid="button-share">
-                <Share2 className="mr-2 h-4 w-4" />
-                Share
-              </Button>
 
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => window.location.href = `/projects/${id}/analytics`}
-                data-testid="button-analytics"
-              >
-                <BarChart3 className="mr-2 h-4 w-4" />
-                Analytics
-              </Button>
-              
-              <ExportMenu 
-                projectId={id!} 
-                projectTitle={project?.title || "Project"}
-                userPlan={user?.subscriptionPlan || "starter"}
+            <div className="flex items-center space-x-3">
+              {/* Connection Status */}
+              <div className="flex items-center space-x-2">
+                <Circle 
+                  className={`h-3 w-3 fill-current ${isConnected ? 'text-green-500' : 'text-gray-400'}`} 
+                  data-testid="connection-status"
+                />
+                <span className="text-sm text-muted-foreground">
+                  {isConnected ? 'Connected' : 'Offline'}
+                </span>
+              </div>
+
+              {/* Presence Indicator */}
+              <PresenceIndicator 
+                onlineUsers={onlineUsers} 
+                currentUser={user}
               />
-              
-              <Button 
+
+              {/* Comment Toggle */}
+              {selectedDocument && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowCommentSidebar(!showCommentSidebar)}
+                  data-testid="button-toggle-comments"
+                >
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  Comments
+                  {comments.length > 0 && (
+                    <Badge className="ml-2" variant="secondary">
+                      {comments.length}
+                    </Badge>
+                  )}
+                </Button>
+              )}
+
+              <Button
+                variant="outline"
                 size="sm"
                 onClick={() => setShowAiModal(true)}
                 data-testid="button-ai-assistant"
               >
-                <Zap className="mr-2 h-4 w-4" />
+                <Zap className="h-4 w-4 mr-2" />
                 AI Assistant
               </Button>
               <Button
+                variant="outline"
                 size="sm"
                 onClick={() => setShowAdvancedAnalysisModal(true)}
                 data-testid="button-advanced-analysis"
               >
-                <Brain className="mr-2 h-4 w-4" />
-                Analysis
+                <Brain className="h-4 w-4 mr-2" />
+                Analyze
               </Button>
+              <ExportMenu
+                projectId={id}
+                projectTitle={project.title}
+                documents={documents}
+              />
             </div>
           </div>
+
+          {/* Progress Bar */}
+          {project.targetWordCount && (
+            <div className="mt-4">
+              <div className="flex items-center justify-between text-sm text-muted-foreground mb-1">
+                <span>Progress</span>
+                <span>{progress}%</span>
+              </div>
+              <Progress value={progress} className="h-2" />
+            </div>
+          )}
         </header>
 
-        {/* Project Content */}
-        <div className="flex-1 overflow-hidden">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
-            <div className="border-b border-border px-6">
-              <TabsList className="grid w-full grid-cols-5">
-                <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
-                <TabsTrigger value="documents" data-testid="tab-documents">Documents</TabsTrigger>
-                <TabsTrigger value="characters" data-testid="tab-characters">Characters</TabsTrigger>
-                <TabsTrigger value="worldbuilding" data-testid="tab-worldbuilding">World</TabsTrigger>
-                <TabsTrigger value="timeline" data-testid="tab-timeline">Timeline</TabsTrigger>
+        {/* Main Content Area */}
+        <div className="flex-1 flex overflow-hidden">
+          <div className={`flex-1 p-6 overflow-y-auto ${showCommentSidebar ? 'mr-96' : ''}`}>
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="mb-6">
+                <TabsTrigger value="overview" data-testid="tab-overview">
+                  <BookOpen className="h-4 w-4 mr-2" />
+                  Overview
+                </TabsTrigger>
+                <TabsTrigger value="documents" data-testid="tab-documents">
+                  <FileText className="h-4 w-4 mr-2" />
+                  Documents
+                </TabsTrigger>
+                <TabsTrigger value="characters" data-testid="tab-characters">
+                  <Users className="h-4 w-4 mr-2" />
+                  Characters
+                </TabsTrigger>
+                <TabsTrigger value="worldbuilding" data-testid="tab-worldbuilding">
+                  <Globe className="h-4 w-4 mr-2" />
+                  World
+                </TabsTrigger>
+                <TabsTrigger value="timeline" data-testid="tab-timeline">
+                  <Clock className="h-4 w-4 mr-2" />
+                  Timeline
+                </TabsTrigger>
               </TabsList>
-            </div>
-            
-            <div className="flex-1 overflow-auto">
-              <TabsContent value="overview" className="p-6 mt-0">
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <div className="lg:col-span-2">
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>Project Overview</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        {project.description && (
-                          <div>
-                            <h4 className="font-medium mb-2">Description</h4>
-                            <p className="text-muted-foreground">{project.description}</p>
-                          </div>
-                        )}
-                        
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <h4 className="font-medium mb-2">Progress</h4>
-                            <div className="space-y-2">
-                              <div className="flex justify-between text-sm">
-                                <span>Current Words</span>
-                                <span>{(project.currentWordCount || 0).toLocaleString()}</span>
-                              </div>
-                              {project.targetWordCount && (
-                                <>
-                                  <div className="flex justify-between text-sm">
-                                    <span>Target Words</span>
-                                    <span>{project.targetWordCount.toLocaleString()}</span>
-                                  </div>
-                                  <Progress value={progress} />
-                                </>
-                              )}
-                            </div>
-                          </div>
-                          
-                          <div>
-                            <h4 className="font-medium mb-2">Quick Stats</h4>
-                            <div className="space-y-2 text-sm">
-                              <div className="flex justify-between">
-                                <span>Characters</span>
-                                <span>{project.characters?.length || 0}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span>Documents</span>
-                                <span>{documents.length}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span>Collaborators</span>
-                                <span>{project.collaborators?.length || 1}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                  
-                  <div className="space-y-6">
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-lg">Recent Activity</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-3">
-                          <div className="flex items-start space-x-3">
-                            <div className="w-2 h-2 bg-chart-1 rounded-full mt-2"></div>
-                            <div>
-                              <p className="text-sm text-card-foreground">Project created</p>
-                              <p className="text-xs text-muted-foreground">
-                                {project.createdAt ? new Date(project.createdAt).toLocaleDateString() : 'Unknown'}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-start space-x-3">
-                            <div className="w-2 h-2 bg-accent rounded-full mt-2"></div>
-                            <div>
-                              <p className="text-sm text-card-foreground">Last updated</p>
-                              <p className="text-xs text-muted-foreground">
-                                {project.updatedAt ? new Date(project.updatedAt).toLocaleDateString() : 'Unknown'}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                </div>
-              </TabsContent>
-              
-              <TabsContent value="documents" className="mt-0 h-full">
-                <div className="h-full flex">
-                  {/* Document List */}
-                  <div className="w-80 border-r border-border bg-card">
-                    <div className="p-4 border-b border-border">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-semibold">Documents</h3>
-                        <Button 
-                          size="sm" 
-                          onClick={handleCreateDocument}
-                          data-testid="button-create-document"
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      </div>
+
+              {/* Overview Tab */}
+              <TabsContent value="overview" className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Project Details</CardTitle>
+                    <CardDescription>
+                      Manage your writing project and track your progress.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div>
+                      <Label>Description</Label>
+                      <p className="text-sm text-muted-foreground">
+                        {project.description || "No description provided"}
+                      </p>
                     </div>
-                    <div className="p-4 space-y-2">
-                      {documents.length === 0 ? (
-                        <div className="text-center py-8">
-                          <FileText className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                          <p className="text-sm text-muted-foreground">No documents yet</p>
-                          <Button 
-                            size="sm" 
-                            variant="ghost" 
-                            onClick={handleCreateDocument}
-                            className="mt-2"
-                          >
-                            Create your first document
-                          </Button>
-                        </div>
-                      ) : (
-                        documents.map((doc: any) => (
-                          <div
-                            key={doc.id}
-                            className={`p-3 rounded-lg cursor-pointer transition-colors ${
-                              selectedDocument === doc.id 
-                                ? 'bg-accent/20 border border-accent' 
-                                : 'hover:bg-muted/50'
-                            }`}
-                            onClick={() => setSelectedDocument(doc.id)}
-                            data-testid={`document-${doc.id}`}
-                          >
-                            <div className="flex items-center space-x-2">
-                              <FileText className="h-4 w-4 text-muted-foreground" />
-                              <span className="font-medium text-sm">{doc.title}</span>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {doc.wordCount || 0} words
-                            </p>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                  
-                  {/* Document Editor */}
-                  <div className="flex-1 flex flex-col">
-                    {selectedDocument ? (
-                      <>
-                        <div className="p-4 border-b border-border bg-card">
-                          <div className="flex items-center justify-between">
-                            <h3 className="font-semibold">{selectedDocumentData?.title}</h3>
-                            <div className="flex items-center space-x-2">
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={handleSaveDocument}
-                                disabled={saveDocumentMutation.isPending || documentContent === selectedDocumentData?.content}
-                                data-testid="button-save-document"
-                              >
-                                <Save className="mr-2 h-4 w-4" />
-                                {saveDocumentMutation.isPending ? "Saving..." : "Save"}
-                              </Button>
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                data-testid="button-preview-document"
-                              >
-                                <Eye className="mr-2 h-4 w-4" />
-                                Preview
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex-1 p-4">
-                          <RichTextEditor
-                            content={documentContent}
-                            onChange={setDocumentContent}
-                            placeholder="Start writing your story..."
-                            className="h-full"
-                          />
-                        </div>
-                      </>
-                    ) : (
-                      <div className="flex-1 flex items-center justify-center">
-                        <div className="text-center">
-                          <FileText className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                          <h3 className="text-lg font-medium text-card-foreground mb-2">
-                            Select a document to edit
-                          </h3>
-                          <p className="text-muted-foreground">
-                            Choose a document from the sidebar or create a new one to start writing.
-                          </p>
+                    {project.collaborators && project.collaborators.length > 0 && (
+                      <div>
+                        <Label>Collaborators</Label>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {project.collaborators.map((collab) => (
+                            <Badge key={collab.userId} variant="secondary">
+                              {collab.user?.firstName} {collab.user?.lastName}
+                              <span className="ml-1 text-xs opacity-70">({collab.role})</span>
+                            </Badge>
+                          ))}
                         </div>
                       </div>
                     )}
-                  </div>
-                </div>
+                    <div className="grid grid-cols-3 gap-4 pt-4">
+                      <Card>
+                        <CardContent className="p-4">
+                          <div className="text-2xl font-semibold">
+                            {documents.length}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            Documents
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardContent className="p-4">
+                          <div className="text-2xl font-semibold">
+                            {characters.length}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            Characters
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardContent className="p-4">
+                          <div className="text-2xl font-semibold">
+                            {project.currentWordCount || 0}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            Total Words
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </CardContent>
+                </Card>
               </TabsContent>
-              
-              <TabsContent value="characters" className="p-6 mt-0">
-                <div className="text-center py-8">
-                  <Users className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-card-foreground mb-2">Character Management</h3>
-                  <p className="text-muted-foreground mb-4">
-                    Manage your story's characters, their backgrounds, and relationships.
-                  </p>
-                  <Button 
-                    onClick={() => setShowCharacterModal(true)}
-                    data-testid="button-add-character"
+
+              {/* Documents Tab */}
+              <TabsContent value="documents" className="space-y-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-semibold">Documents</h2>
+                  <Button
+                    onClick={handleCreateDocument}
+                    data-testid="button-create-document"
+                    disabled={currentUserRole === 'reader'}
                   >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Character
+                    <Plus className="h-4 w-4 mr-2" />
+                    New Document
                   </Button>
                 </div>
+
+                {documents.length === 0 ? (
+                  <Card>
+                    <CardContent className="text-center py-8">
+                      <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                      <p className="text-muted-foreground">
+                        No documents yet. Create your first document to start writing.
+                      </p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Select a document</Label>
+                      <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                        {documents.map((doc) => (
+                          <Card
+                            key={doc.id}
+                            className={`cursor-pointer transition-colors hover:bg-accent ${
+                              selectedDocument === doc.id ? 'border-primary' : ''
+                            }`}
+                            onClick={() => setSelectedDocument(doc.id)}
+                            data-testid={`document-card-${doc.id}`}
+                          >
+                            <CardContent className="p-4">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <h4 className="font-medium">{doc.title}</h4>
+                                  <p className="text-sm text-muted-foreground">
+                                    {doc.wordCount || 0} words
+                                  </p>
+                                </div>
+                                <Badge variant="outline">{doc.type}</Badge>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    </div>
+
+                    {selectedDocument && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label>Edit Document</Label>
+                          <div className="flex items-center space-x-2">
+                            {currentUserRole && currentUserRole !== 'reader' && (
+                              <Button
+                                size="sm"
+                                onClick={handleSaveDocument}
+                                disabled={documentContent === selectedDocumentData?.content}
+                                data-testid="button-save-document"
+                              >
+                                <Save className="h-4 w-4 mr-2" />
+                                Save
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                        <RichTextEditor
+                          content={documentContent}
+                          onChange={setDocumentContent}
+                          ydoc={ydoc}
+                          awareness={awareness}
+                          xmlFragment={xmlFragment}
+                          isCollaborative={isConnected}
+                          readOnly={currentUserRole === 'reader'}
+                          onlineUsers={onlineUsers}
+                          userColor={userColor}
+                          userRole={currentUserRole}
+                          userName={user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email : 'Anonymous'}
+                          onCommentClick={() => setShowCommentSidebar(true)}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
               </TabsContent>
-              
-              <TabsContent value="worldbuilding" className="p-6 mt-0">
-                <div className="text-center py-8">
-                  <Globe className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-card-foreground mb-2">World Building</h3>
-                  <p className="text-muted-foreground mb-4">
-                    Create and organize locations, cultures, and world systems.
-                  </p>
-                  <Button data-testid="button-add-world-entry">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add World Entry
+
+              {/* Characters Tab */}
+              <TabsContent value="characters" className="space-y-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-semibold">Characters</h2>
+                  <Button
+                    onClick={() => setShowCharacterModal(true)}
+                    data-testid="button-create-character"
+                    disabled={currentUserRole === 'reader'}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    New Character
                   </Button>
                 </div>
+
+                {characters.length === 0 ? (
+                  <Card>
+                    <CardContent className="text-center py-8">
+                      <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                      <p className="text-muted-foreground">
+                        No characters yet. Create your first character to bring your story to life.
+                      </p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {characters.map((character) => (
+                      <Card key={character.id} data-testid={`character-card-${character.id}`}>
+                        <CardHeader>
+                          <CardTitle className="text-lg">{character.name}</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                          {character.description && (
+                            <p className="text-sm text-muted-foreground line-clamp-3">
+                              {character.description}
+                            </p>
+                          )}
+                          <div className="flex items-center justify-between pt-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setEditingCharacter(character);
+                                setCharacterFormData({
+                                  name: character.name,
+                                  description: character.description || "",
+                                  background: character.background || "",
+                                  personality: character.personality || "",
+                                  appearance: character.appearance || "",
+                                  notes: character.notes || ""
+                                });
+                                setShowCharacterModal(true);
+                              }}
+                              disabled={currentUserRole === 'reader'}
+                              data-testid={`button-edit-character-${character.id}`}
+                            >
+                              <Edit3 className="h-4 w-4 mr-1" />
+                              Edit
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              data-testid={`button-view-character-${character.id}`}
+                            >
+                              <Eye className="h-4 w-4 mr-1" />
+                              View
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
               </TabsContent>
-              
-              <TabsContent value="timeline" className="p-6 mt-0">
-                <div className="text-center py-8">
-                  <Clock className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-card-foreground mb-2">Timeline</h3>
-                  <p className="text-muted-foreground mb-4">
-                    Track important events and story chronology.
-                  </p>
-                  <Button data-testid="button-add-timeline-event">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Event
-                  </Button>
-                </div>
+
+              {/* Worldbuilding Tab */}
+              <TabsContent value="worldbuilding">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>World Building</CardTitle>
+                    <CardDescription>
+                      Create and organize the world of your story
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="text-center py-8">
+                    <Globe className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                    <p className="text-muted-foreground">
+                      World building features coming soon!
+                    </p>
+                  </CardContent>
+                </Card>
               </TabsContent>
+
+              {/* Timeline Tab */}
+              <TabsContent value="timeline">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Timeline</CardTitle>
+                    <CardDescription>
+                      Track events and plot points in your story
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="text-center py-8">
+                    <Clock className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                    <p className="text-muted-foreground">
+                      Timeline features coming soon!
+                    </p>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </div>
+
+          {/* Comment Sidebar */}
+          {showCommentSidebar && selectedDocument && (
+            <div className="fixed right-0 top-0 h-full w-96 bg-background shadow-xl z-20">
+              <CommentSidebar
+                documentId={selectedDocument}
+                comments={comments}
+                currentUser={user}
+                userRole={currentUserRole}
+                onClose={() => setShowCommentSidebar(false)}
+                onAddComment={handleAddComment}
+                onUpdateComment={handleUpdateComment}
+                onDeleteComment={handleDeleteComment}
+                onResolveComment={handleResolveComment}
+                onReplyToComment={handleReplyToComment}
+              />
             </div>
-          </Tabs>
+          )}
         </div>
       </main>
 
-      <AiAssistantModal
-        open={showAiModal}
-        onClose={() => setShowAiModal(false)}
-        projects={[project]}
-      />
-
-      {project && (
-        <AdvancedAnalysisModal
-          open={showAdvancedAnalysisModal}
-          onClose={() => setShowAdvancedAnalysisModal(false)}
+      {/* AI Assistant Modal */}
+      {showAiModal && project && (
+        <AiAssistantModal
+          isOpen={showAiModal}
+          onClose={() => setShowAiModal(false)}
           projectId={project.id}
           projectTitle={project.title}
+          documents={documents}
           characters={characters}
         />
       )}
 
+      {/* Advanced Analysis Modal */}
+      {showAdvancedAnalysisModal && project && (
+        <AdvancedAnalysisModal
+          isOpen={showAdvancedAnalysisModal}
+          onClose={() => setShowAdvancedAnalysisModal(false)}
+          projectId={project.id}
+          projectTitle={project.title}
+          documents={documents}
+        />
+      )}
+
+      {/* Character Modal */}
       <Dialog open={showCharacterModal} onOpenChange={handleCloseCharacterModal}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto" data-testid="modal-character">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>
-              {editingCharacter ? "Edit Character" : "Create New Character"}
+              {editingCharacter ? 'Edit Character' : 'Create New Character'}
             </DialogTitle>
             <DialogDescription>
-              {editingCharacter ? "Update your character's details." : "Add a new character to your story."}
+              Add details about your character
             </DialogDescription>
           </DialogHeader>
-          
           <form onSubmit={handleCharacterSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Character Name *</Label>
+            <div>
+              <Label htmlFor="name">Name</Label>
               <Input
                 id="name"
                 value={characterFormData.name}
-                onChange={(e) => setCharacterFormData({ ...characterFormData, name: e.target.value })}
-                placeholder="Enter character name"
+                onChange={(e) => setCharacterFormData({...characterFormData, name: e.target.value})}
+                placeholder="Character name"
                 required
                 data-testid="input-character-name"
               />
             </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="description">Brief Description</Label>
-              <Input
+            <div>
+              <Label htmlFor="description">Description</Label>
+              <Textarea
                 id="description"
                 value={characterFormData.description}
-                onChange={(e) => setCharacterFormData({ ...characterFormData, description: e.target.value })}
-                placeholder="Quick character description"
-                data-testid="input-character-description"
+                onChange={(e) => setCharacterFormData({...characterFormData, description: e.target.value})}
+                placeholder="Brief description of the character"
+                className="min-h-[80px]"
+                data-testid="textarea-character-description"
               />
             </div>
-            
-            <div className="space-y-2">
+            <div>
               <Label htmlFor="personality">Personality</Label>
               <Textarea
                 id="personality"
                 value={characterFormData.personality}
-                onChange={(e) => setCharacterFormData({ ...characterFormData, personality: e.target.value })}
-                placeholder="Describe their personality traits, quirks, and behavior..."
-                className="resize-none h-20"
-                data-testid="input-character-personality"
+                onChange={(e) => setCharacterFormData({...characterFormData, personality: e.target.value})}
+                placeholder="Character traits, behaviors, and quirks"
+                className="min-h-[80px]"
+                data-testid="textarea-character-personality"
               />
             </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="appearance">Appearance</Label>
-              <Textarea
-                id="appearance"
-                value={characterFormData.appearance}
-                onChange={(e) => setCharacterFormData({ ...characterFormData, appearance: e.target.value })}
-                placeholder="Physical description, clothing style, distinctive features..."
-                className="resize-none h-20"
-                data-testid="input-character-appearance"
-              />
-            </div>
-            
-            <div className="space-y-2">
+            <div>
               <Label htmlFor="background">Background</Label>
               <Textarea
                 id="background"
                 value={characterFormData.background}
-                onChange={(e) => setCharacterFormData({ ...characterFormData, background: e.target.value })}
-                placeholder="Character's history, origin, significant life events..."
-                className="resize-none h-20"
-                data-testid="input-character-background"
+                onChange={(e) => setCharacterFormData({...characterFormData, background: e.target.value})}
+                placeholder="Character's history and backstory"
+                className="min-h-[80px]"
+                data-testid="textarea-character-background"
               />
             </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="notes">Additional Notes</Label>
+            <div>
+              <Label htmlFor="appearance">Appearance</Label>
+              <Textarea
+                id="appearance"
+                value={characterFormData.appearance}
+                onChange={(e) => setCharacterFormData({...characterFormData, appearance: e.target.value})}
+                placeholder="Physical description"
+                className="min-h-[80px]"
+                data-testid="textarea-character-appearance"
+              />
+            </div>
+            <div>
+              <Label htmlFor="notes">Notes</Label>
               <Textarea
                 id="notes"
                 value={characterFormData.notes}
-                onChange={(e) => setCharacterFormData({ ...characterFormData, notes: e.target.value })}
-                placeholder="Character development notes, relationships, plot relevance..."
-                className="resize-none h-20"
-                data-testid="input-character-notes"
+                onChange={(e) => setCharacterFormData({...characterFormData, notes: e.target.value})}
+                placeholder="Additional notes or reminders"
+                className="min-h-[80px]"
+                data-testid="textarea-character-notes"
               />
             </div>
-
-            <div className="flex justify-end space-x-2 pt-4 border-t border-border">
+            <div className="flex justify-end space-x-2">
               <Button 
                 type="button" 
                 variant="outline" 
@@ -735,19 +881,37 @@ export default function Project() {
                 Cancel
               </Button>
               <Button 
-                type="submit" 
-                disabled={createCharacterMutation.isPending || !characterFormData.name.trim()}
+                type="submit"
+                disabled={!characterFormData.name}
                 data-testid="button-save-character"
               >
-                {createCharacterMutation.isPending
-                  ? "Creating..." 
-                  : editingCharacter ? "Update Character" : "Create Character"
-                }
+                {editingCharacter ? 'Update' : 'Create'} Character
               </Button>
             </div>
           </form>
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// Main component with CollaborationProvider wrapper
+export default function Project() {
+  const { id } = useParams();
+  const { user, isAuthenticated } = useAuth();
+  
+  if (!id || !isAuthenticated || !user) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  // Wrap the entire project page with collaboration provider
+  return (
+    <CollaborationProvider documentId={id} projectId={id}>
+      <ProjectContent />
+    </CollaborationProvider>
   );
 }

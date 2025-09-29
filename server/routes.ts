@@ -3,6 +3,9 @@ import { createServer, type Server } from "http";
 import Stripe from "stripe";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
+import { db } from "./db";
+import { documentComments } from "@shared/schema";
+import { eq } from "drizzle-orm";
 import { 
   generateContent, 
   buildMusePrompt, 
@@ -1058,6 +1061,211 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error exporting project:", error);
       res.status(500).json({ message: "Failed to export project" });
+    }
+  });
+
+  // Collaboration REST endpoints
+  
+  // Get initial Yjs document collaboration state
+  app.get('/api/documents/:id/collaboration-state', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const document = await storage.getDocument(req.params.id);
+      
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      const project = await storage.getProject(document.projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const hasAccess = project.ownerId === userId || 
+        project.collaborators.some(c => c.userId === userId);
+      
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const state = await storage.getCollaborationState(req.params.id);
+      res.json({ 
+        state: state?.ydocState || null,
+        documentId: req.params.id,
+        projectId: document.projectId 
+      });
+    } catch (error) {
+      console.error("Error fetching collaboration state:", error);
+      res.status(500).json({ message: "Failed to fetch collaboration state" });
+    }
+  });
+
+  // Get document comments
+  app.get('/api/documents/:id/comments', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const document = await storage.getDocument(req.params.id);
+      
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      const project = await storage.getProject(document.projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const hasAccess = project.ownerId === userId || 
+        project.collaborators.some(c => c.userId === userId);
+      
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const comments = await storage.getDocumentComments(req.params.id);
+      res.json(comments);
+    } catch (error) {
+      console.error("Error fetching comments:", error);
+      res.status(500).json({ message: "Failed to fetch comments" });
+    }
+  });
+
+  // Create new comment
+  app.post('/api/documents/:id/comments', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { content, range } = req.body;
+      
+      if (!content) {
+        return res.status(400).json({ message: "Comment content is required" });
+      }
+
+      const document = await storage.getDocument(req.params.id);
+      
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      const project = await storage.getProject(document.projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const userRole = project.ownerId === userId ? 'owner' : await storage.getUserRole(document.projectId, userId);
+      
+      if (!userRole || userRole === 'reader') {
+        return res.status(403).json({ message: "Insufficient permissions to add comments" });
+      }
+
+      const comment = await storage.createComment(req.params.id, userId, content, range);
+      res.json(comment);
+    } catch (error) {
+      console.error("Error creating comment:", error);
+      res.status(500).json({ message: "Failed to create comment" });
+    }
+  });
+
+  // Update comment
+  app.put('/api/comments/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { content, resolved } = req.body;
+      
+      // Get comment to check permissions
+      const comments = await db.select().from(documentComments).where(eq(documentComments.id, req.params.id));
+      const comment = comments[0];
+      
+      if (!comment) {
+        return res.status(404).json({ message: "Comment not found" });
+      }
+
+      // Check if user owns the comment or has edit permissions
+      if (comment.authorId !== userId) {
+        const document = await storage.getDocument(comment.documentId);
+        if (!document) {
+          return res.status(404).json({ message: "Document not found" });
+        }
+        
+        const project = await storage.getProject(document.projectId);
+        if (!project) {
+          return res.status(404).json({ message: "Project not found" });
+        }
+        
+        const userRole = project.ownerId === userId ? 'owner' : await storage.getUserRole(document.projectId, userId);
+        if (!userRole || userRole === 'reader') {
+          return res.status(403).json({ message: "Insufficient permissions to update comment" });
+        }
+      }
+
+      const updated = await storage.updateComment(req.params.id, { content, resolved });
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating comment:", error);
+      res.status(500).json({ message: "Failed to update comment" });
+    }
+  });
+
+  // Delete comment
+  app.delete('/api/comments/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      // Get comment to check permissions
+      const comments = await db.select().from(documentComments).where(eq(documentComments.id, req.params.id));
+      const comment = comments[0];
+      
+      if (!comment) {
+        return res.status(404).json({ message: "Comment not found" });
+      }
+
+      // Check if user owns the comment or has owner/editor permissions
+      if (comment.authorId !== userId) {
+        const document = await storage.getDocument(comment.documentId);
+        if (!document) {
+          return res.status(404).json({ message: "Document not found" });
+        }
+        
+        const project = await storage.getProject(document.projectId);
+        if (!project) {
+          return res.status(404).json({ message: "Project not found" });
+        }
+        
+        const userRole = project.ownerId === userId ? 'owner' : await storage.getUserRole(document.projectId, userId);
+        if (!userRole || (userRole !== 'owner' && userRole !== 'editor')) {
+          return res.status(403).json({ message: "Insufficient permissions to delete comment" });
+        }
+      }
+
+      await storage.deleteComment(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting comment:", error);
+      res.status(500).json({ message: "Failed to delete comment" });
+    }
+  });
+
+  // Get online users in project
+  app.get('/api/projects/:id/presence', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const project = await storage.getProject(req.params.id);
+      
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const hasAccess = project.ownerId === userId || 
+        project.collaborators.some(c => c.userId === userId);
+      
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const presence = await storage.getProjectPresence(req.params.id);
+      res.json(presence);
+    } catch (error) {
+      console.error("Error fetching presence:", error);
+      res.status(500).json({ message: "Failed to fetch presence" });
     }
   });
 

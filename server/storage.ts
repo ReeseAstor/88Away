@@ -1,4 +1,5 @@
 import {
+  sessions,
   users,
   projects,
   characters,
@@ -39,6 +40,9 @@ import { db } from "./db";
 import { eq, and, desc, asc, lt, sql } from "drizzle-orm";
 
 export interface IStorage {
+  // Session operations
+  getSession(sessionId: string): Promise<{ sid: string; sess: any; expire: Date } | undefined>;
+  
   // User operations (mandatory for Replit Auth)
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
@@ -118,6 +122,12 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  // Session operations
+  async getSession(sessionId: string): Promise<{ sid: string; sess: any; expire: Date } | undefined> {
+    const [session] = await db.select().from(sessions).where(eq(sessions.sid, sessionId));
+    return session;
+  }
+
   // User operations
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
