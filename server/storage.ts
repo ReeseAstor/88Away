@@ -8,6 +8,9 @@ import {
   documentVersions,
   projectCollaborators,
   aiGenerations,
+  documentCollaborationStates,
+  documentComments,
+  collaborationPresence,
   type User,
   type UpsertUser,
   type Project,
@@ -26,9 +29,14 @@ import {
   type AiGeneration,
   type ProjectWithCollaborators,
   type DocumentWithVersions,
+  type DocumentCollaborationState,
+  type DocumentComment,
+  type InsertDocumentComment,
+  type CollaborationPresence,
+  type InsertCollaborationPresence,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, asc } from "drizzle-orm";
+import { eq, and, desc, asc, lt, sql } from "drizzle-orm";
 
 export interface IStorage {
   // User operations (mandatory for Replit Auth)
@@ -91,6 +99,22 @@ export interface IStorage {
   saveAnalysisCache(key: string, data: any): Promise<void>;
   getAnalysisCache(key: string): Promise<{ data: any; timestamp: Date } | undefined>;
   clearAnalysisCache(projectId: string): Promise<void>;
+
+  // Comment CRUD operations
+  createComment(documentId: string, authorId: string, content: string, range?: { start: number; end: number }): Promise<DocumentComment>;
+  getDocumentComments(documentId: string): Promise<DocumentComment[]>;
+  updateComment(commentId: string, updates: { content?: string; resolved?: boolean }): Promise<DocumentComment>;
+  deleteComment(commentId: string): Promise<void>;
+  resolveComment(commentId: string): Promise<DocumentComment>;
+
+  // Collaboration state persistence
+  saveCollaborationState(documentId: string, ydocState: string): Promise<DocumentCollaborationState>;
+  getCollaborationState(documentId: string): Promise<DocumentCollaborationState | undefined>;
+
+  // Presence management
+  updatePresence(projectId: string, userId: string, documentId: string | null, status: 'online' | 'offline' | 'away', cursorPos?: { line: number; column: number }, color?: string): Promise<CollaborationPresence>;
+  getProjectPresence(projectId: string): Promise<CollaborationPresence[]>;
+  cleanupStalePresence(): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -506,6 +530,224 @@ export class DatabaseStorage implements IStorage {
       }
     }
     keysToDelete.forEach(key => this.analysisCache.delete(key));
+  }
+
+  // Comment CRUD operations
+  async createComment(documentId: string, authorId: string, content: string, range?: { start: number; end: number }): Promise<DocumentComment> {
+    // Check if user has access to the document
+    const [document] = await db.select().from(documents).where(eq(documents.id, documentId));
+    if (!document) {
+      throw new Error("Document not found");
+    }
+
+    // Check user has access to the project
+    const hasAccess = await this.checkProjectAccess(document.projectId, authorId);
+    if (!hasAccess) {
+      throw new Error("User does not have access to this project");
+    }
+
+    const [comment] = await db
+      .insert(documentComments)
+      .values({
+        documentId,
+        authorId,
+        content,
+        range: range || null,
+      })
+      .returning();
+    return comment;
+  }
+
+  async getDocumentComments(documentId: string): Promise<DocumentComment[]> {
+    return await db
+      .select()
+      .from(documentComments)
+      .where(eq(documentComments.documentId, documentId))
+      .orderBy(asc(documentComments.createdAt));
+  }
+
+  async updateComment(commentId: string, updates: { content?: string; resolved?: boolean }): Promise<DocumentComment> {
+    const [updated] = await db
+      .update(documentComments)
+      .set(updates)
+      .where(eq(documentComments.id, commentId))
+      .returning();
+    
+    if (!updated) {
+      throw new Error("Comment not found");
+    }
+    
+    return updated;
+  }
+
+  async deleteComment(commentId: string): Promise<void> {
+    await db.delete(documentComments).where(eq(documentComments.id, commentId));
+  }
+
+  async resolveComment(commentId: string): Promise<DocumentComment> {
+    const [resolved] = await db
+      .update(documentComments)
+      .set({ resolved: true })
+      .where(eq(documentComments.id, commentId))
+      .returning();
+    
+    if (!resolved) {
+      throw new Error("Comment not found");
+    }
+    
+    return resolved;
+  }
+
+  // Collaboration state persistence
+  async saveCollaborationState(documentId: string, ydocState: string): Promise<DocumentCollaborationState> {
+    const [state] = await db
+      .insert(documentCollaborationStates)
+      .values({
+        documentId,
+        ydocState,
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: documentCollaborationStates.documentId,
+        set: {
+          ydocState,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return state;
+  }
+
+  async getCollaborationState(documentId: string): Promise<DocumentCollaborationState | undefined> {
+    const [state] = await db
+      .select()
+      .from(documentCollaborationStates)
+      .where(eq(documentCollaborationStates.documentId, documentId));
+    return state;
+  }
+
+  // Presence management
+  async updatePresence(
+    projectId: string,
+    userId: string,
+    documentId: string | null,
+    status: 'online' | 'offline' | 'away',
+    cursorPos?: { line: number; column: number },
+    color?: string
+  ): Promise<CollaborationPresence> {
+    // Check user has access to the project
+    const hasAccess = await this.checkProjectAccess(projectId, userId);
+    if (!hasAccess) {
+      throw new Error("User does not have access to this project");
+    }
+
+    // First, try to find existing presence for this user in this project
+    const [existingPresence] = await db
+      .select()
+      .from(collaborationPresence)
+      .where(
+        and(
+          eq(collaborationPresence.projectId, projectId),
+          eq(collaborationPresence.userId, userId)
+        )
+      );
+
+    if (existingPresence) {
+      // Update existing presence
+      const [updated] = await db
+        .update(collaborationPresence)
+        .set({
+          documentId,
+          status,
+          cursorPos: cursorPos || null,
+          color: color || existingPresence.color,
+          lastSeen: new Date(),
+        })
+        .where(eq(collaborationPresence.id, existingPresence.id))
+        .returning();
+      return updated;
+    } else {
+      // Create new presence
+      const [newPresence] = await db
+        .insert(collaborationPresence)
+        .values({
+          projectId,
+          userId,
+          documentId,
+          status,
+          cursorPos: cursorPos || null,
+          color: color || this.generateUserColor(),
+          lastSeen: new Date(),
+        })
+        .returning();
+      return newPresence;
+    }
+  }
+
+  async getProjectPresence(projectId: string): Promise<CollaborationPresence[]> {
+    return await db
+      .select()
+      .from(collaborationPresence)
+      .where(eq(collaborationPresence.projectId, projectId))
+      .orderBy(desc(collaborationPresence.lastSeen));
+  }
+
+  async cleanupStalePresence(): Promise<void> {
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    
+    await db
+      .delete(collaborationPresence)
+      .where(
+        and(
+          eq(collaborationPresence.status, 'online'),
+          lt(collaborationPresence.lastSeen, fiveMinutesAgo)
+        )
+      );
+  }
+
+  // Helper method to check project access
+  private async checkProjectAccess(projectId: string, userId: string): Promise<boolean> {
+    // Check if user is owner
+    const [project] = await db
+      .select()
+      .from(projects)
+      .where(eq(projects.id, projectId));
+    
+    if (!project) {
+      return false;
+    }
+    
+    if (project.ownerId === userId) {
+      return true;
+    }
+    
+    // Check if user is a collaborator
+    const [collaborator] = await db
+      .select()
+      .from(projectCollaborators)
+      .where(
+        and(
+          eq(projectCollaborators.projectId, projectId),
+          eq(projectCollaborators.userId, userId)
+        )
+      );
+    
+    return !!collaborator;
+  }
+
+  // Helper method to generate a color for user cursor
+  private generateUserColor(): string {
+    const colors = [
+      '#FF6B6B', // Red
+      '#4ECDC4', // Teal
+      '#45B7D1', // Blue
+      '#96CEB4', // Green
+      '#FFEAA7', // Yellow
+      '#DDA0DD', // Plum
+      '#F4A460', // Sandy
+      '#98D8C8', // Mint
+    ];
+    return colors[Math.floor(Math.random() * colors.length)];
   }
 }
 

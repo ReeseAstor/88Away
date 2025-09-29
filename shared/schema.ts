@@ -170,15 +170,50 @@ export const activityLogs = pgTable("activity_logs", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Document collaboration states for real-time collaboration
+export const documentCollaborationStates = pgTable("document_collaboration_states", {
+  documentId: varchar("document_id").primaryKey().references(() => documents.id, { onDelete: 'cascade' }),
+  ydocState: text("ydoc_state").notNull(), // Yjs CRDT state as base64 string
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Document comments for collaborative feedback
+export const documentComments = pgTable("document_comments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  documentId: varchar("document_id").notNull().references(() => documents.id, { onDelete: 'cascade' }),
+  authorId: varchar("author_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  content: text("content").notNull(),
+  range: jsonb("range"), // { start: number, end: number } for text selection
+  resolved: boolean("resolved").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Collaboration presence status enum
+export const presenceStatusEnum = pgEnum('presence_status', ['online', 'offline', 'away']);
+
+// Collaboration presence for real-time user tracking
+export const collaborationPresence = pgTable("collaboration_presence", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  documentId: varchar("document_id").references(() => documents.id, { onDelete: 'cascade' }),
+  status: presenceStatusEnum("status").notNull(),
+  cursorPos: jsonb("cursor_pos"), // { line: number, column: number } or similar
+  color: varchar("color"), // Hex color for cursor/selection highlight
+  lastSeen: timestamp("last_seen").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   ownedProjects: many(projects),
   collaborations: many(projectCollaborators),
   documents: many(documents),
   documentVersions: many(documentVersions),
+  documentComments: many(documentComments),
   aiGenerations: many(aiGenerations),
   writingSessions: many(writingSessions),
   activityLogs: many(activityLogs),
+  collaborationPresence: many(collaborationPresence),
 }));
 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
@@ -194,6 +229,7 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   aiGenerations: many(aiGenerations),
   writingSessions: many(writingSessions),
   activityLogs: many(activityLogs),
+  collaborationPresence: many(collaborationPresence),
 }));
 
 export const projectCollaboratorsRelations = relations(projectCollaborators, ({ one }) => ({
@@ -238,6 +274,11 @@ export const documentsRelations = relations(documents, ({ one, many }) => ({
     references: [users.id],
   }),
   versions: many(documentVersions),
+  comments: many(documentComments),
+  collaborationState: one(documentCollaborationStates, {
+    fields: [documents.id],
+    references: [documentCollaborationStates.documentId],
+  }),
 }));
 
 export const documentVersionsRelations = relations(documentVersions, ({ one }) => ({
@@ -285,6 +326,40 @@ export const activityLogsRelations = relations(activityLogs, ({ one }) => ({
   user: one(users, {
     fields: [activityLogs.userId],
     references: [users.id],
+  }),
+}));
+
+// Collaboration tables relations
+export const documentCollaborationStatesRelations = relations(documentCollaborationStates, ({ one }) => ({
+  document: one(documents, {
+    fields: [documentCollaborationStates.documentId],
+    references: [documents.id],
+  }),
+}));
+
+export const documentCommentsRelations = relations(documentComments, ({ one }) => ({
+  document: one(documents, {
+    fields: [documentComments.documentId],
+    references: [documents.id],
+  }),
+  author: one(users, {
+    fields: [documentComments.authorId],
+    references: [users.id],
+  }),
+}));
+
+export const collaborationPresenceRelations = relations(collaborationPresence, ({ one }) => ({
+  project: one(projects, {
+    fields: [collaborationPresence.projectId],
+    references: [projects.id],
+  }),
+  user: one(users, {
+    fields: [collaborationPresence.userId],
+    references: [users.id],
+  }),
+  document: one(documents, {
+    fields: [collaborationPresence.documentId],
+    references: [documents.id],
   }),
 }));
 
@@ -345,6 +420,17 @@ export const insertActivityLogSchema = createInsertSchema(activityLogs).omit({
   createdAt: true,
 });
 
+// Collaboration insert schemas
+export const insertDocumentCommentSchema = createInsertSchema(documentComments).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCollaborationPresenceSchema = createInsertSchema(collaborationPresence).omit({
+  id: true,
+  lastSeen: true,
+});
+
 // Worldbuilding details interface
 export interface WorldbuildingDetails {
   content?: string;
@@ -372,6 +458,13 @@ export type InsertWritingSession = z.infer<typeof insertWritingSessionSchema>;
 export type WritingSession = typeof writingSessions.$inferSelect;
 export type InsertActivityLog = z.infer<typeof insertActivityLogSchema>;
 export type ActivityLog = typeof activityLogs.$inferSelect;
+
+// Collaboration types
+export type DocumentCollaborationState = typeof documentCollaborationStates.$inferSelect;
+export type InsertDocumentComment = z.infer<typeof insertDocumentCommentSchema>;
+export type DocumentComment = typeof documentComments.$inferSelect;
+export type InsertCollaborationPresence = z.infer<typeof insertCollaborationPresenceSchema>;
+export type CollaborationPresence = typeof collaborationPresence.$inferSelect;
 
 // Extended types with relations
 export type ProjectWithCollaborators = Project & {
