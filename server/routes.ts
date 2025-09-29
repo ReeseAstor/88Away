@@ -10,6 +10,7 @@ import {
   buildCoachPrompt,
   type AiRequest 
 } from "./openai";
+import { AnalyticsService } from "./analytics";
 import { 
   insertProjectSchema,
   insertCharacterSchema,
@@ -127,6 +128,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting project:", error);
       res.status(500).json({ message: "Failed to delete project" });
+    }
+  });
+
+  // Analytics routes
+  app.get('/api/projects/:id/analytics', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const analytics = await AnalyticsService.getProjectAnalytics(req.params.id, userId);
+      res.json(analytics);
+    } catch (error) {
+      console.error("Error fetching analytics:", error);
+      if (error instanceof Error && error.message.includes('Access denied')) {
+        res.status(403).json({ message: error.message });
+      } else {
+        res.status(500).json({ message: "Failed to fetch analytics" });
+      }
     }
   });
 
