@@ -53,6 +53,39 @@
   --spacing: 0.25rem;
 }
 
+/* Collaboration cursors and selections */
+.collaboration-cursor {
+  position: relative;
+  margin-left: -1px;
+  margin-right: -1px;
+  border-left: 2px solid;
+  border-color: currentColor;
+  word-break: normal;
+  pointer-events: none;
+}
+
+.collaboration-cursor-label {
+  position: absolute;
+  top: -1.4em;
+  left: -1px;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 600;
+  line-height: normal;
+  user-select: none;
+  color: white;
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px 3px 3px 0;
+  white-space: nowrap;
+}
+
+.collaboration-selection {
+  position: relative;
+  pointer-events: none;
+  background-color: currentColor;
+  opacity: 0.3;
+}
+
 .dark {
   --background: hsl(210, 25%, 7.8431%);
   --foreground: hsl(210, 20%, 98%);
