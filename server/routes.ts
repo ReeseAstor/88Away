@@ -1068,7 +1068,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           sourceHead.content,
           sourceHead.ydocState,
           userId,
-          sourceHead.wordCount
+          sourceHead.wordCount || undefined
         );
 
         await storage.updateMergeEvent(mergeEvent.id, 'completed', {
