@@ -10,6 +10,7 @@ import Project from "@/pages/project";
 import Characters from "@/pages/characters";
 import Worldbuilding from "@/pages/worldbuilding";
 import Timeline from "@/pages/timeline";
+import Analytics from "@/pages/analytics";
 import Subscription from "@/pages/subscription";
 import NotFound from "@/pages/not-found";
 
@@ -27,6 +28,7 @@ function Router() {
           <Route path="/projects/:id/characters" component={Characters} />
           <Route path="/projects/:id/worldbuilding" component={Worldbuilding} />
           <Route path="/projects/:id/timeline" component={Timeline} />
+          <Route path="/projects/:id/analytics" component={Analytics} />
           <Route path="/subscription" component={Subscription} />
         </>
       )}

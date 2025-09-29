@@ -1,6 +1,6 @@
 # Overview
 
-This is a collaborative writing platform that combines AI-powered assistance with comprehensive story bible management. The application provides three specialized AI personas (Muse for creative inspiration, Editor for polishing, and Coach for planning) to help writers manage projects, characters, worldbuilding, timelines, and documents. It features role-based collaboration with Owner, Editor, Reviewer, and Reader permissions, along with Stripe-based subscription management.
+This is a collaborative writing platform that combines AI-powered assistance with comprehensive story bible management. The application provides three specialized AI personas (Muse for creative inspiration, Editor for polishing, and Coach for planning) to help writers manage projects, characters, worldbuilding, timelines, and documents. It features role-based collaboration with Owner, Editor, Reviewer, and Reader permissions, along with Stripe-based subscription management and comprehensive analytics dashboards for tracking writing progress and team collaboration.
 
 # User Preferences
 
