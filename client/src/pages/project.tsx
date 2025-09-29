@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest } from "@/lib/queryClient";
+import { useStore } from "@/lib/store";
 import Sidebar from "@/components/sidebar";
 import RichTextEditor from "@/components/rich-text-editor";
 import AiAssistantModal from "@/components/ai-assistant-modal";
@@ -22,6 +23,12 @@ import ExportMenu from "@/components/export-menu";
 import { CollaborationProvider, useCollaboration } from "@/components/collaboration-provider";
 import CommentSidebar from "@/components/comment-sidebar";
 import PresenceIndicator from "@/components/presence-indicator";
+import BranchSwitcher from "@/components/branch-switcher";
+import BranchManagementModal from "@/components/branch-management-modal";
+import VersionHistory from "@/components/version-history";
+import MergeDialog from "@/components/merge-dialog";
+import ConflictResolutionPanel from "@/components/conflict-resolution-panel";
+import DiffViewer from "@/components/diff-viewer";
 import {
   useDocumentComments,
   useCreateComment,
@@ -30,6 +37,20 @@ import {
   useResolveComment,
   useCommentSubscription
 } from "@/hooks/useComments";
+import {
+  useBranches,
+  useCreateBranch,
+  useSwitchBranch,
+  useBranchVersions,
+  useRollback,
+  useMergeBranches,
+  useMergeEvents,
+  useMergePreview,
+  useUpdateBranch,
+  useDeleteBranch,
+  useResolveMergeConflicts,
+  useCreateVersion
+} from "@/hooks/useBranches";
 import { 
   BookOpen, 
   Users, 
@@ -48,7 +69,10 @@ import {
   BarChart3,
   Brain,
   MessageSquare,
-  Circle
+  Circle,
+  GitBranch,
+  GitMerge,
+  History
 } from "lucide-react";
 import { Project as ProjectType, Document, ProjectWithCollaborators, Character, DocumentComment as Comment } from "@shared/schema";
 
@@ -58,6 +82,7 @@ function ProjectContent() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { currentBranch, setCurrentBranch, setCurrentDocumentId } = useStore();
   
   // Collaboration context
   const { ydoc, awareness, isConnected, onlineUsers, sendComment, userColor, userRole, xmlFragment } = useCollaboration();
@@ -79,6 +104,14 @@ function ProjectContent() {
     appearance: "",
     notes: ""
   });
+  
+  // Version control state
+  const [showBranchManagement, setShowBranchManagement] = useState(false);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [showMergeDialog, setShowMergeDialog] = useState(false);
+  const [conflictResolution, setConflictResolution] = useState<any>(null);
+  const [diffComparison, setDiffComparison] = useState<{ left: any; right: any } | null>(null);
+  const [selectedVersions, setSelectedVersions] = useState<string[]>([]);
 
   // Redirect to home if not authenticated
   useEffect(() => {
@@ -128,6 +161,20 @@ function ProjectContent() {
   
   // Subscribe to real-time comment updates
   useCommentSubscription(selectedDocument, isConnected);
+  
+  // Branch and version hooks
+  const { data: branches = [] } = useBranches(selectedDocument);
+  const { data: versions = [] } = useBranchVersions(currentBranch);
+  const { data: mergeEvents = [] } = useMergeEvents(selectedDocument);
+  const createBranchMutation = useCreateBranch();
+  const switchBranchMutation = useSwitchBranch();
+  const rollbackMutation = useRollback();
+  const mergeBranchesMutation = useMergeBranches();
+  const mergePreviewMutation = useMergePreview();
+  const updateBranchMutation = useUpdateBranch();
+  const deleteBranchMutation = useDeleteBranch();
+  const resolveMergeConflictsMutation = useResolveMergeConflicts();
+  const createVersionMutation = useCreateVersion();
 
   // Load document content when selected
   useEffect(() => {
@@ -135,6 +182,13 @@ function ProjectContent() {
       setDocumentContent(selectedDocumentData.content);
     }
   }, [selectedDocumentData]);
+  
+  // Update store when document changes
+  useEffect(() => {
+    if (selectedDocument) {
+      setCurrentDocumentId(selectedDocument);
+    }
+  }, [selectedDocument, setCurrentDocumentId]);
 
   const saveDocumentMutation = useMutation({
     mutationFn: async (content: string) => {
@@ -602,13 +656,69 @@ function ProjectContent() {
 
                     {selectedDocument && (
                       <div className="space-y-2">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between mb-2">
                           <Label>Edit Document</Label>
                           <div className="flex items-center space-x-2">
+                            {/* Branch Switcher */}
+                            <BranchSwitcher
+                              branches={branches.map(b => ({
+                                ...b,
+                                createdBy: b.createdBy || 'Unknown',
+                                createdAt: b.createdAt || new Date(),
+                                updatedAt: b.updatedAt || new Date()
+                              }))}
+                              currentBranch={branches.find(b => b.id === currentBranch) || null}
+                              onSwitchBranch={(branchId) => {
+                                switchBranchMutation.mutate({ documentId: selectedDocument, branchId });
+                              }}
+                              onCreateBranch={() => setShowBranchManagement(true)}
+                              disabled={!isConnected}
+                              userRole={currentUserRole}
+                            />
+                            
+                            {/* Version Control Buttons */}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setShowVersionHistory(!showVersionHistory)}
+                              data-testid="button-version-history"
+                            >
+                              <History className="h-4 w-4" />
+                            </Button>
+                            
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setShowMergeDialog(true)}
+                              disabled={branches.length < 2 || !['owner', 'editor'].includes(currentUserRole || '')}
+                              data-testid="button-merge"
+                            >
+                              <GitMerge className="h-4 w-4" />
+                            </Button>
+                            
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setShowBranchManagement(true)}
+                              data-testid="button-branch-management"
+                            >
+                              <GitBranch className="h-4 w-4" />
+                            </Button>
+                            
                             {currentUserRole && currentUserRole !== 'reader' && (
                               <Button
                                 size="sm"
-                                onClick={handleSaveDocument}
+                                onClick={() => {
+                                  handleSaveDocument();
+                                  // Create a version after saving
+                                  if (currentBranch) {
+                                    createVersionMutation.mutate({
+                                      branchId: currentBranch,
+                                      content: documentContent,
+                                      message: `Save at ${new Date().toLocaleTimeString()}`
+                                    });
+                                  }
+                                }}
                                 disabled={documentContent === selectedDocumentData?.content}
                                 data-testid="button-save-document"
                               >
@@ -618,6 +728,39 @@ function ProjectContent() {
                             )}
                           </div>
                         </div>
+                        
+                        {/* Version History Panel */}
+                        {showVersionHistory && (
+                          <div className="mb-4">
+                            <VersionHistory
+                              versions={versions.map(v => ({
+                                ...v,
+                                branchId: v.branchId || currentBranch || '',
+                                authorName: v.authorName || 'Unknown',
+                                createdAt: v.createdAt || new Date()
+                              }))}
+                              currentVersionId={versions[0]?.id}
+                              onRollback={async (versionId) => {
+                                await rollbackMutation.mutateAsync({ versionId, branchId: currentBranch || '' });
+                              }}
+                              onPreview={(versionId) => {
+                                const version = versions.find(v => v.id === versionId);
+                                if (version) {
+                                  setDocumentContent(version.content || '');
+                                }
+                              }}
+                              onCompare={(v1, v2) => {
+                                const left = versions.find(v => v.id === v1);
+                                const right = versions.find(v => v.id === v2);
+                                if (left && right) {
+                                  setDiffComparison({ left, right });
+                                }
+                              }}
+                              userRole={currentUserRole}
+                            />
+                          </div>
+                        )}
+                        
                         <RichTextEditor
                           content={documentContent}
                           onChange={setDocumentContent}
@@ -891,6 +1034,119 @@ function ProjectContent() {
           </form>
         </DialogContent>
       </Dialog>
+      
+      {/* Branch Management Modal */}
+      {selectedDocument && (
+        <BranchManagementModal
+          open={showBranchManagement}
+          onClose={() => setShowBranchManagement(false)}
+          branches={branches.map(b => ({
+            ...b,
+            name: b.name || 'Unnamed',
+            createdBy: b.createdBy || 'Unknown',
+            createdAt: b.createdAt || new Date(),
+            updatedAt: b.updatedAt || new Date()
+          }))}
+          currentBranchId={currentBranch}
+          onCreateBranch={async (data) => {
+            await createBranchMutation.mutateAsync({
+              documentId: selectedDocument,
+              name: data.name,
+              description: data.description,
+              parentBranchId: data.parentBranchId
+            });
+          }}
+          onUpdateBranch={async (branchId, data) => {
+            await updateBranchMutation.mutateAsync({ branchId, data });
+          }}
+          onDeleteBranch={async (branchId) => {
+            await deleteBranchMutation.mutateAsync(branchId);
+          }}
+          userRole={currentUserRole}
+        />
+      )}
+      
+      {/* Merge Dialog */}
+      {selectedDocument && (
+        <MergeDialog
+          open={showMergeDialog}
+          onClose={() => setShowMergeDialog(false)}
+          branches={branches.map(b => ({
+            ...b,
+            id: b.id || '',
+            name: b.name || 'Unnamed',
+            updatedAt: b.updatedAt || new Date()
+          }))}
+          currentBranch={branches.find(b => b.id === currentBranch) || null}
+          onMerge={async (sourceBranchId, targetBranchId, strategy) => {
+            const result = await mergeBranchesMutation.mutateAsync({
+              documentId: selectedDocument,
+              sourceBranchId,
+              targetBranchId,
+              strategy
+            });
+            
+            if (result?.hasConflicts) {
+              setConflictResolution({
+                mergeEventId: result.id,
+                conflicts: result.conflicts,
+                sourceBranch: branches.find(b => b.id === sourceBranchId)?.name || 'Unknown',
+                targetBranch: branches.find(b => b.id === targetBranchId)?.name || 'Unknown'
+              });
+              setShowMergeDialog(false);
+            }
+          }}
+          onPreviewMerge={async (sourceBranchId, targetBranchId) => {
+            return await mergePreviewMutation.mutateAsync({
+              documentId: selectedDocument,
+              sourceBranchId,
+              targetBranchId
+            });
+          }}
+          userRole={currentUserRole}
+        />
+      )}
+      
+      {/* Conflict Resolution Panel */}
+      {conflictResolution && (
+        <Dialog open={true} onOpenChange={() => setConflictResolution(null)}>
+          <DialogContent className="max-w-6xl h-[90vh] p-0">
+            <ConflictResolutionPanel
+              conflicts={conflictResolution.conflicts}
+              sourceBranch={conflictResolution.sourceBranch}
+              targetBranch={conflictResolution.targetBranch}
+              onResolve={async (resolutions) => {
+                await resolveMergeConflictsMutation.mutateAsync({
+                  mergeEventId: conflictResolution.mergeEventId,
+                  resolutions
+                });
+                setConflictResolution(null);
+              }}
+              onCancel={() => setConflictResolution(null)}
+              userRole={currentUserRole}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
+      
+      {/* Diff Viewer Dialog */}
+      {diffComparison && (
+        <Dialog open={true} onOpenChange={() => setDiffComparison(null)}>
+          <DialogContent className="max-w-6xl h-[90vh] p-0">
+            <DiffViewer
+              leftVersion={{
+                ...diffComparison.left,
+                branchName: branches.find(b => b.id === diffComparison.left.branchId)?.name || 'Unknown'
+              }}
+              rightVersion={{
+                ...diffComparison.right,
+                branchName: branches.find(b => b.id === diffComparison.right.branchId)?.name || 'Unknown'
+              }}
+              onClose={() => setDiffComparison(null)}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
