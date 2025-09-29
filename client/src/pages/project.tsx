@@ -17,6 +17,7 @@ import { apiRequest } from "@/lib/queryClient";
 import Sidebar from "@/components/sidebar";
 import RichTextEditor from "@/components/rich-text-editor";
 import AiAssistantModal from "@/components/ai-assistant-modal";
+import AdvancedAnalysisModal from "@/components/advanced-analysis-modal";
 import ExportMenu from "@/components/export-menu";
 import { 
   BookOpen, 
@@ -33,7 +34,8 @@ import {
   Save,
   Eye,
   Calendar,
-  BarChart3
+  BarChart3,
+  Brain
 } from "lucide-react";
 import { Project as ProjectType, Document, ProjectWithCollaborators, Character } from "@shared/schema";
 
@@ -44,6 +46,7 @@ export default function Project() {
   const queryClient = useQueryClient();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showAiModal, setShowAiModal] = useState(false);
+  const [showAdvancedAnalysisModal, setShowAdvancedAnalysisModal] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<string | null>(null);
   const [documentContent, setDocumentContent] = useState("");
   const [activeTab, setActiveTab] = useState("overview");
@@ -349,6 +352,14 @@ export default function Project() {
                 <Zap className="mr-2 h-4 w-4" />
                 AI Assistant
               </Button>
+              <Button
+                size="sm"
+                onClick={() => setShowAdvancedAnalysisModal(true)}
+                data-testid="button-advanced-analysis"
+              >
+                <Brain className="mr-2 h-4 w-4" />
+                Analysis
+              </Button>
             </div>
           </div>
         </header>
@@ -620,6 +631,16 @@ export default function Project() {
         onClose={() => setShowAiModal(false)}
         projects={[project]}
       />
+
+      {project && (
+        <AdvancedAnalysisModal
+          open={showAdvancedAnalysisModal}
+          onClose={() => setShowAdvancedAnalysisModal(false)}
+          projectId={project.id}
+          projectTitle={project.title}
+          characters={characters}
+        />
+      )}
 
       <Dialog open={showCharacterModal} onOpenChange={handleCloseCharacterModal}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto" data-testid="modal-character">
