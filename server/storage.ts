@@ -86,6 +86,11 @@ export interface IStorage {
     metadata?: any;
   }): Promise<AiGeneration>;
   getUserAiGenerations(userId: string, limit?: number): Promise<AiGeneration[]>;
+
+  // Analysis cache operations
+  saveAnalysisCache(key: string, data: any): Promise<void>;
+  getAnalysisCache(key: string): Promise<{ data: any; timestamp: Date } | undefined>;
+  clearAnalysisCache(projectId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -475,6 +480,32 @@ export class DatabaseStorage implements IStorage {
       .where(eq(aiGenerations.userId, userId))
       .orderBy(desc(aiGenerations.createdAt))
       .limit(limit);
+  }
+
+  // Analysis cache operations  
+  private analysisCache = new Map<string, { data: any; timestamp: Date }>();
+
+  async saveAnalysisCache(key: string, data: any): Promise<void> {
+    this.analysisCache.set(key, {
+      data,
+      timestamp: new Date()
+    });
+  }
+
+  async getAnalysisCache(key: string): Promise<{ data: any; timestamp: Date } | undefined> {
+    return this.analysisCache.get(key);
+  }
+
+  async clearAnalysisCache(projectId: string): Promise<void> {
+    // Clear all cache entries related to this project
+    const keysToDelete: string[] = [];
+    const keys = Array.from(this.analysisCache.keys());
+    for (const key of keys) {
+      if (key.includes(projectId)) {
+        keysToDelete.push(key);
+      }
+    }
+    keysToDelete.forEach(key => this.analysisCache.delete(key));
   }
 }
 

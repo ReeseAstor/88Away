@@ -8,7 +8,15 @@ import {
   buildMusePrompt, 
   buildEditorPrompt, 
   buildCoachPrompt,
-  type AiRequest 
+  analyzeWritingStyle,
+  analyzePlotConsistency,
+  analyzeCharacterDevelopment,
+  analyzeNarrativeFlow,
+  type AiRequest,
+  type StyleAnalysisRequest,
+  type PlotConsistencyRequest,
+  type CharacterDevelopmentRequest,
+  type NarrativeFlowRequest
 } from "./openai";
 import { AnalyticsService } from "./analytics";
 import { 
@@ -588,6 +596,333 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error with Coach generation:", error);
       res.status(500).json({ message: "Failed to generate outline" });
+    }
+  });
+
+  // Advanced Analysis Routes
+  app.post('/api/projects/:id/analysis/style', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const projectId = req.params.id;
+      
+      // Check project access and premium status
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const hasAccess = project.ownerId === userId || 
+        project.collaborators.some(c => c.userId === userId);
+      
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      // Check premium subscription
+      const user = await storage.getUser(userId);
+      console.log('User subscription check:', { userId, subscriptionPlan: user?.subscriptionPlan, subscriptionStatus: user?.subscriptionStatus });
+      if (!user?.subscriptionPlan || !['professional', 'enterprise'].includes(user.subscriptionPlan)) {
+        return res.status(403).json({ 
+          message: "This feature requires a Professional or Enterprise subscription",
+          requiresUpgrade: true
+        });
+      }
+
+      // Check if we have cached results (within 24 hours)
+      const cacheKey = `style_analysis_${projectId}`;
+      const cached = await storage.getAnalysisCache(cacheKey);
+      if (cached && cached.timestamp && new Date(cached.timestamp).getTime() > Date.now() - 86400000) {
+        return res.json(cached.data);
+      }
+
+      // Get project documents
+      const documents = await storage.getProjectDocuments(projectId);
+      if (!documents || documents.length === 0) {
+        return res.status(400).json({ message: "No documents found for analysis" });
+      }
+
+      // Perform style analysis
+      const analysisRequest: StyleAnalysisRequest = {
+        documents: documents.map(d => ({
+          id: d.id,
+          title: d.title,
+          content: d.content || ''
+        })),
+        projectContext: project.genre || undefined
+      };
+      
+      console.log('Analysis request documents count:', analysisRequest.documents.length);
+      console.log('First document sample:', analysisRequest.documents[0]?.content?.substring(0, 100));
+
+      const result = await analyzeWritingStyle(analysisRequest);
+      console.log('Analysis result data keys:', Object.keys(result.data || {}));
+      console.log('Analysis result recommendations count:', result.recommendations?.length || 0);
+
+      // Cache the results
+      await storage.saveAnalysisCache(cacheKey, result);
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error in style analysis:", error);
+      res.status(500).json({ message: "Failed to analyze writing style" });
+    }
+  });
+
+  app.post('/api/projects/:id/analysis/plot', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const projectId = req.params.id;
+      
+      // Check project access and premium status
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const hasAccess = project.ownerId === userId || 
+        project.collaborators.some(c => c.userId === userId);
+      
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      // Check premium subscription
+      const user = await storage.getUser(userId);
+      console.log('User subscription check:', { userId, subscriptionPlan: user?.subscriptionPlan, subscriptionStatus: user?.subscriptionStatus });
+      if (!user?.subscriptionPlan || !['professional', 'enterprise'].includes(user.subscriptionPlan)) {
+        return res.status(403).json({ 
+          message: "This feature requires a Professional or Enterprise subscription",
+          requiresUpgrade: true
+        });
+      }
+
+      // Check cache
+      const cacheKey = `plot_analysis_${projectId}`;
+      const cached = await storage.getAnalysisCache(cacheKey);
+      if (cached && cached.timestamp && new Date(cached.timestamp).getTime() > Date.now() - 86400000) {
+        return res.json(cached.data);
+      }
+
+      // Get project data
+      const documents = await storage.getProjectDocuments(projectId);
+      const timeline = await storage.getProjectTimeline(projectId);
+      const characters = await storage.getProjectCharacters(projectId);
+
+      if (!documents || documents.length === 0) {
+        return res.status(400).json({ message: "No documents found for analysis" });
+      }
+
+      // Perform plot consistency analysis
+      const analysisRequest: PlotConsistencyRequest = {
+        documents: documents.map(d => ({
+          id: d.id,
+          title: d.title,
+          content: d.content || '',
+          orderIndex: d.orderIndex || 0
+        })),
+        timeline: timeline.map(t => ({
+          title: t.title,
+          date: t.date || '',
+          description: t.description || ''
+        })),
+        characters: characters.map(c => ({
+          name: c.name,
+          description: c.description || ''
+        }))
+      };
+
+      const result = await analyzePlotConsistency(analysisRequest);
+
+      // Cache results
+      await storage.saveAnalysisCache(cacheKey, result);
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error in plot consistency analysis:", error);
+      res.status(500).json({ message: "Failed to analyze plot consistency" });
+    }
+  });
+
+  app.post('/api/projects/:id/analysis/character/:characterId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const projectId = req.params.id;
+      const characterId = req.params.characterId;
+      
+      // Check project access and premium status
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const hasAccess = project.ownerId === userId || 
+        project.collaborators.some(c => c.userId === userId);
+      
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      // Check premium subscription
+      const user = await storage.getUser(userId);
+      console.log('User subscription check:', { userId, subscriptionPlan: user?.subscriptionPlan, subscriptionStatus: user?.subscriptionStatus });
+      if (!user?.subscriptionPlan || !['professional', 'enterprise'].includes(user.subscriptionPlan)) {
+        return res.status(403).json({ 
+          message: "This feature requires a Professional or Enterprise subscription",
+          requiresUpgrade: true
+        });
+      }
+
+      // Get character
+      const character = await storage.getCharacter(characterId);
+      if (!character || character.projectId !== projectId) {
+        return res.status(404).json({ message: "Character not found" });
+      }
+
+      // Check cache
+      const cacheKey = `character_analysis_${characterId}`;
+      const cached = await storage.getAnalysisCache(cacheKey);
+      if (cached && cached.timestamp && new Date(cached.timestamp).getTime() > Date.now() - 86400000) {
+        return res.json(cached.data);
+      }
+
+      // Get project documents
+      const documents = await storage.getProjectDocuments(projectId);
+
+      if (!documents || documents.length === 0) {
+        return res.status(400).json({ message: "No documents found for analysis" });
+      }
+
+      // Perform character development analysis
+      const analysisRequest: CharacterDevelopmentRequest = {
+        character: {
+          name: character.name,
+          description: character.description || '',
+          background: character.background || undefined
+        },
+        documents: documents.map(d => ({
+          id: d.id,
+          title: d.title,
+          content: d.content || '',
+          orderIndex: d.orderIndex || 0
+        }))
+      };
+
+      const result = await analyzeCharacterDevelopment(analysisRequest);
+
+      // Cache results
+      await storage.saveAnalysisCache(cacheKey, result);
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error in character development analysis:", error);
+      res.status(500).json({ message: "Failed to analyze character development" });
+    }
+  });
+
+  app.post('/api/projects/:id/analysis/narrative', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const projectId = req.params.id;
+      
+      // Check project access and premium status
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const hasAccess = project.ownerId === userId || 
+        project.collaborators.some(c => c.userId === userId);
+      
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      // Check premium subscription
+      const user = await storage.getUser(userId);
+      console.log('User subscription check:', { userId, subscriptionPlan: user?.subscriptionPlan, subscriptionStatus: user?.subscriptionStatus });
+      if (!user?.subscriptionPlan || !['professional', 'enterprise'].includes(user.subscriptionPlan)) {
+        return res.status(403).json({ 
+          message: "This feature requires a Professional or Enterprise subscription",
+          requiresUpgrade: true
+        });
+      }
+
+      // Check cache
+      const cacheKey = `narrative_analysis_${projectId}`;
+      const cached = await storage.getAnalysisCache(cacheKey);
+      if (cached && cached.timestamp && new Date(cached.timestamp).getTime() > Date.now() - 86400000) {
+        return res.json(cached.data);
+      }
+
+      // Get project documents
+      const documents = await storage.getProjectDocuments(projectId);
+
+      if (!documents || documents.length === 0) {
+        return res.status(400).json({ message: "No documents found for analysis" });
+      }
+
+      // Perform narrative flow analysis
+      const analysisRequest: NarrativeFlowRequest = {
+        documents: documents.map(d => ({
+          id: d.id,
+          title: d.title,
+          content: d.content || '',
+          orderIndex: d.orderIndex || 0
+        })),
+        genre: project.genre || undefined,
+        targetPacing: req.body.targetPacing || 'moderate'
+      };
+
+      const result = await analyzeNarrativeFlow(analysisRequest);
+
+      // Cache results
+      await storage.saveAnalysisCache(cacheKey, result);
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error in narrative flow analysis:", error);
+      res.status(500).json({ message: "Failed to analyze narrative flow" });
+    }
+  });
+
+  // Get cached analysis results
+  app.get('/api/projects/:id/analysis/cache/:type', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const projectId = req.params.id;
+      const analysisType = req.params.type;
+      
+      // Validate analysis type
+      const validTypes = ['style', 'plot', 'narrative'];
+      if (!validTypes.includes(analysisType)) {
+        return res.status(400).json({ message: "Invalid analysis type" });
+      }
+
+      // Check project access
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const hasAccess = project.ownerId === userId || 
+        project.collaborators.some(c => c.userId === userId);
+      
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      // Get cached analysis
+      const cacheKey = `${analysisType}_analysis_${projectId}`;
+      const cached = await storage.getAnalysisCache(cacheKey);
+
+      if (!cached) {
+        return res.status(404).json({ message: "No cached analysis found" });
+      }
+
+      res.json(cached);
+    } catch (error) {
+      console.error("Error fetching cached analysis:", error);
+      res.status(500).json({ message: "Failed to fetch cached analysis" });
     }
   });
 
