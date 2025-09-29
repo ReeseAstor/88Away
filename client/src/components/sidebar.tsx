@@ -16,9 +16,9 @@ import {
   CreditCard,
   LogOut,
   Menu,
-  Plus,
-  Edit3
+  Plus
 } from "lucide-react";
+import logo from "@/assets/88away-logo.png";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -133,9 +133,11 @@ export default function Sidebar({ collapsed, onToggleCollapse, currentPath }: Si
       <div className="p-4 border-b border-secondary/20">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center">
-              <Edit3 className="h-4 w-4 text-accent-foreground" />
-            </div>
+            <img 
+              src={logo} 
+              alt="88Away Logo" 
+              className="h-8 w-auto brightness-0 invert opacity-90"
+            />
             {!collapsed && (
               <div>
                 <h1 className="text-lg font-semibold">88Away</h1>
