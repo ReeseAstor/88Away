@@ -17,6 +17,7 @@ import { apiRequest } from "@/lib/queryClient";
 import Sidebar from "@/components/sidebar";
 import RichTextEditor from "@/components/rich-text-editor";
 import AiAssistantModal from "@/components/ai-assistant-modal";
+import ExportMenu from "@/components/export-menu";
 import { 
   BookOpen, 
   Users, 
@@ -323,10 +324,11 @@ export default function Project() {
                 Share
               </Button>
               
-              <Button variant="outline" size="sm" data-testid="button-export">
-                <Download className="mr-2 h-4 w-4" />
-                Export
-              </Button>
+              <ExportMenu 
+                projectId={id!} 
+                projectTitle={project?.title || "Project"}
+                userPlan={user?.subscriptionPlan || "starter"}
+              />
               
               <Button 
                 size="sm"
