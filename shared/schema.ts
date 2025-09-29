@@ -144,6 +144,32 @@ export const aiGenerations = pgTable("ai_generations", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Writing sessions for detailed activity tracking
+export const writingSessions = pgTable("writing_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  documentId: varchar("document_id").references(() => documents.id, { onDelete: 'cascade' }),
+  wordsWritten: integer("words_written").default(0),
+  duration: integer("duration").default(0), // in minutes
+  startTime: timestamp("start_time").defaultNow(),
+  endTime: timestamp("end_time"),
+  sessionType: varchar("session_type").default("writing"), // writing, editing, planning
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Activity log for detailed user actions
+export const activityLogs = pgTable("activity_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  action: varchar("action").notNull(), // created, updated, deleted, viewed
+  entityType: varchar("entity_type").notNull(), // document, character, worldbuilding, timeline
+  entityId: varchar("entity_id"),
+  details: jsonb("details"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   ownedProjects: many(projects),
@@ -151,6 +177,8 @@ export const usersRelations = relations(users, ({ many }) => ({
   documents: many(documents),
   documentVersions: many(documentVersions),
   aiGenerations: many(aiGenerations),
+  writingSessions: many(writingSessions),
+  activityLogs: many(activityLogs),
 }));
 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
@@ -164,6 +192,8 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   timelineEvents: many(timelineEvents),
   documents: many(documents),
   aiGenerations: many(aiGenerations),
+  writingSessions: many(writingSessions),
+  activityLogs: many(activityLogs),
 }));
 
 export const projectCollaboratorsRelations = relations(projectCollaborators, ({ one }) => ({
@@ -232,6 +262,32 @@ export const aiGenerationsRelations = relations(aiGenerations, ({ one }) => ({
   }),
 }));
 
+export const writingSessionsRelations = relations(writingSessions, ({ one }) => ({
+  project: one(projects, {
+    fields: [writingSessions.projectId],
+    references: [projects.id],
+  }),
+  user: one(users, {
+    fields: [writingSessions.userId],
+    references: [users.id],
+  }),
+  document: one(documents, {
+    fields: [writingSessions.documentId],
+    references: [documents.id],
+  }),
+}));
+
+export const activityLogsRelations = relations(activityLogs, ({ one }) => ({
+  project: one(projects, {
+    fields: [activityLogs.projectId],
+    references: [projects.id],
+  }),
+  user: one(users, {
+    fields: [activityLogs.userId],
+    references: [users.id],
+  }),
+}));
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).pick({
   email: true,
@@ -279,6 +335,16 @@ export const insertProjectCollaboratorSchema = createInsertSchema(projectCollabo
   createdAt: true,
 });
 
+export const insertWritingSessionSchema = createInsertSchema(writingSessions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertActivityLogSchema = createInsertSchema(activityLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Worldbuilding details interface
 export interface WorldbuildingDetails {
   content?: string;
@@ -302,6 +368,10 @@ export type DocumentVersion = typeof documentVersions.$inferSelect;
 export type InsertProjectCollaborator = z.infer<typeof insertProjectCollaboratorSchema>;
 export type ProjectCollaborator = typeof projectCollaborators.$inferSelect;
 export type AiGeneration = typeof aiGenerations.$inferSelect;
+export type InsertWritingSession = z.infer<typeof insertWritingSessionSchema>;
+export type WritingSession = typeof writingSessions.$inferSelect;
+export type InsertActivityLog = z.infer<typeof insertActivityLogSchema>;
+export type ActivityLog = typeof activityLogs.$inferSelect;
 
 // Extended types with relations
 export type ProjectWithCollaborators = Project & {
