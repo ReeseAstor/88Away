@@ -614,24 +614,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Export route
+  // Export route with multiple format support
   app.get('/api/projects/:projectId/export', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
+      const format = req.query.format || 'json'; // Default to JSON
       const project = await storage.getProject(req.params.projectId);
       
       if (!project) {
         return res.status(404).json({ message: "Project not found" });
       }
 
-      const hasAccess = project.ownerId === userId || 
+      // Check project access - user must own or be collaborator
+      const hasProjectAccess = project.ownerId === userId || 
         project.collaborators.some(c => c.userId === userId);
       
-      if (!hasAccess) {
-        return res.status(403).json({ message: "Access denied" });
+      if (!hasProjectAccess) {
+        return res.status(403).json({ message: "Access denied - not authorized for this project" });
       }
 
-      // Export project data as JSON
+      // Check premium format access for subscription plans
+      const premiumFormats = ['pdf', 'epub'];
+      if (premiumFormats.includes(format.toLowerCase())) {
+        const user = await storage.getUser(userId);
+        const userPlan = user?.subscriptionPlan || 'starter';
+        const hasAccessToPremium = ['professional', 'enterprise', 'pro'].includes(userPlan);
+        
+        if (!hasAccessToPremium) {
+          return res.status(403).json({ 
+            message: "Premium feature", 
+            description: `${format.toUpperCase()} export is available for Professional plan subscribers. Upgrade to access advanced export formats.`,
+            upgradeRequired: true 
+          });
+        }
+      }
+
+      // Prepare export data
       const exportData = {
         project: {
           title: project.title,
@@ -647,9 +665,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
         exportedAt: new Date().toISOString(),
       };
 
-      res.setHeader('Content-Type', 'application/json');
-      res.setHeader('Content-Disposition', `attachment; filename="${project.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_export.json"`);
-      res.json(exportData);
+      const filename = project.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+
+      switch (format.toLowerCase()) {
+        case 'pdf':
+          // PDF format - requires Professional plan or above
+          const { ExportGenerator } = await import('./export-utils');
+          const pdfBuffer = await ExportGenerator.generatePDF(exportData);
+          res.setHeader('Content-Type', 'application/pdf');
+          res.setHeader('Content-Disposition', `attachment; filename="${filename}_export.pdf"`);
+          res.send(pdfBuffer);
+          break;
+
+        case 'epub':
+          // ePub format - requires Professional plan or above
+          const { ExportGenerator: EpubGenerator } = await import('./export-utils');
+          const epubBuffer = await EpubGenerator.generateEPub(exportData);
+          res.setHeader('Content-Type', 'application/epub+zip');
+          res.setHeader('Content-Disposition', `attachment; filename="${filename}_export.epub"`);
+          res.send(epubBuffer);
+          break;
+
+        case 'html':
+          // HTML format
+          const { ExportGenerator: HtmlGenerator } = await import('./export-utils');
+          const htmlContent = await HtmlGenerator.generateHTML(exportData);
+          res.setHeader('Content-Type', 'text/html; charset=utf-8');
+          res.setHeader('Content-Disposition', `attachment; filename="${filename}_export.html"`);
+          res.send(htmlContent);
+          break;
+
+        case 'json':
+        default:
+          // JSON format (default)
+          res.setHeader('Content-Type', 'application/json');
+          res.setHeader('Content-Disposition', `attachment; filename="${filename}_export.json"`);
+          res.json(exportData);
+          break;
+      }
     } catch (error) {
       console.error("Error exporting project:", error);
       res.status(500).json({ message: "Failed to export project" });
