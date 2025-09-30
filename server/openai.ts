@@ -235,9 +235,9 @@ export interface AnalysisResult<T = any> {
 
 // Helper function to try multiple models with fallback
 async function createChatCompletionWithFallback(
-  messages: Array<{ role: string; content: string }>,
+  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
   options: {
-    response_format?: { type: string };
+    response_format?: { type: 'json_object' };
     max_tokens?: number;
   } = {}
 ) {
