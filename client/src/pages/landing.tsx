@@ -92,11 +92,8 @@ export default function Landing() {
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
           <div className="text-center">
             <div className="flex items-center justify-center mb-8">
-              <img src={logo} alt="88Away Logo" className="h-20 w-auto" />
+              <img src={logo} alt="88Away Logo" className="h-24 w-auto" />
             </div>
-            <h1 className="text-5xl sm:text-6xl font-bold text-foreground mb-6">
-              <span className="text-accent">88Away</span>
-            </h1>
             <p className="text-xl text-muted-foreground mb-8 max-w-3xl mx-auto">
               The professional writing platform that combines story bible management, 
               AI-powered assistance, and team collaboration to elevate your creative process.
