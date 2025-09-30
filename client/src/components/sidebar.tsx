@@ -138,11 +138,6 @@ export default function Sidebar({ collapsed, onToggleCollapse, currentPath }: Si
               alt="88Away Logo" 
               className="h-8 w-auto brightness-0 invert opacity-90"
             />
-            {!collapsed && (
-              <div>
-                <h1 className="text-lg font-semibold">88Away</h1>
-              </div>
-            )}
           </div>
           <Button
             variant="ghost"
