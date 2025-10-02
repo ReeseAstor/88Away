@@ -454,6 +454,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put('/api/timeline/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const event = await storage.getTimelineEvent(req.params.id);
+      
+      if (!event) {
+        return res.status(404).json({ message: "Timeline event not found" });
+      }
+
+      const project = await storage.getProject(event.projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const userRole = project.ownerId === userId ? 'owner' : await storage.getUserRole(event.projectId, userId);
+      
+      if (!userRole || (userRole !== 'owner' && userRole !== 'editor')) {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+
+      // Normalize array fields if provided as strings
+      const normalizedBody = { ...req.body };
+      if (normalizedBody.tags && typeof normalizedBody.tags === 'string') {
+        normalizedBody.tags = normalizedBody.tags.split(',').map((tag: string) => tag.trim()).filter(Boolean);
+      }
+      if (normalizedBody.relatedCharacters && typeof normalizedBody.relatedCharacters === 'string') {
+        normalizedBody.relatedCharacters = normalizedBody.relatedCharacters.split(',').map((char: string) => char.trim()).filter(Boolean);
+      }
+      if (normalizedBody.relatedLocations && typeof normalizedBody.relatedLocations === 'string') {
+        normalizedBody.relatedLocations = normalizedBody.relatedLocations.split(',').map((loc: string) => loc.trim()).filter(Boolean);
+      }
+
+      // Prevent projectId changes - override with existing event's projectId
+      const validatedData = insertTimelineEventSchema.partial().parse({
+        ...normalizedBody,
+        projectId: event.projectId
+      });
+
+      const updated = await storage.updateTimelineEvent(req.params.id, validatedData);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating timeline event:", error);
+      res.status(500).json({ message: "Failed to update timeline event" });
+    }
+  });
+
+  app.delete('/api/timeline/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const event = await storage.getTimelineEvent(req.params.id);
+      
+      if (!event) {
+        return res.status(404).json({ message: "Timeline event not found" });
+      }
+
+      const project = await storage.getProject(event.projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const userRole = project.ownerId === userId ? 'owner' : await storage.getUserRole(event.projectId, userId);
+      
+      if (!userRole || (userRole !== 'owner' && userRole !== 'editor')) {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+
+      await storage.deleteTimelineEvent(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting timeline event:", error);
+      res.status(500).json({ message: "Failed to delete timeline event" });
+    }
+  });
+
   // Document routes
   app.get('/api/projects/:projectId/documents', isAuthenticated, async (req: any, res) => {
     try {
