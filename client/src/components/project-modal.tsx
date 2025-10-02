@@ -20,6 +20,7 @@ interface ProjectModalProps {
 
 export default function ProjectModal({ open, onClose, onSubmit, loading = false }: ProjectModalProps) {
   const [formData, setFormData] = useState({
+    template: "blank",
     title: "",
     description: "",
     genre: "",
@@ -40,10 +41,18 @@ export default function ProjectModal({ open, onClose, onSubmit, loading = false 
     "Other"
   ];
 
+  const templates = [
+    { value: "blank", label: "Blank Project", description: "Start with an empty project" },
+    { value: "novel", label: "Novel Template", description: "3 chapters, 2 characters, worldbuilding & timeline" },
+    { value: "screenplay", label: "Screenplay Template", description: "3 acts, 2 characters, locations & timeline" },
+    { value: "short-story", label: "Short Story Template", description: "1 draft, character, setting & key event" },
+  ];
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
     const submitData = {
+      template: formData.template,
       title: formData.title,
       description: formData.description || undefined,
       genre: formData.genre || undefined,
@@ -56,6 +65,7 @@ export default function ProjectModal({ open, onClose, onSubmit, loading = false 
 
   const handleClose = () => {
     setFormData({
+      template: "blank",
       title: "",
       description: "",
       genre: "",
@@ -76,6 +86,25 @@ export default function ProjectModal({ open, onClose, onSubmit, loading = false 
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="template">Template</Label>
+            <Select value={formData.template} onValueChange={(value) => setFormData({ ...formData, template: value })}>
+              <SelectTrigger data-testid="select-project-template">
+                <SelectValue placeholder="Select a template" />
+              </SelectTrigger>
+              <SelectContent>
+                {templates.map((template) => (
+                  <SelectItem key={template.value} value={template.value} data-testid={`option-template-${template.value}`}>
+                    <div className="flex flex-col">
+                      <span className="font-medium">{template.label}</span>
+                      <span className="text-xs text-muted-foreground">{template.description}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="title">Project Title *</Label>
             <Input
