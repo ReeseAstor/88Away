@@ -581,6 +581,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch('/api/timeline/:id/reorder', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const event = await storage.getTimelineEvent(req.params.id);
+      
+      if (!event) {
+        return res.status(404).json({ message: "Timeline event not found" });
+      }
+
+      const project = await storage.getProject(event.projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const userRole = project.ownerId === userId ? 'owner' : await storage.getUserRole(event.projectId, userId);
+      
+      if (!userRole || (userRole !== 'owner' && userRole !== 'editor')) {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+
+      const reorderSchema = z.object({
+        orderIndex: z.number(),
+        date: z.string().optional(),
+      });
+      
+      const validatedData = reorderSchema.parse(req.body);
+      const updated = await storage.reorderTimelineEvents(
+        event.projectId,
+        req.params.id,
+        validatedData.orderIndex,
+        validatedData.date
+      );
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error reordering timeline event:", error);
+      res.status(500).json({ message: "Failed to reorder timeline event" });
+    }
+  });
+
   // Document routes
   app.get('/api/projects/:projectId/documents', isAuthenticated, async (req: any, res) => {
     try {

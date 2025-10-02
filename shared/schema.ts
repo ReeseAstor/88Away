@@ -125,6 +125,7 @@ export const timelineEvents = pgTable("timeline_events", {
   description: text("description"),
   date: varchar("date"), // Flexible date format for fictional timelines
   importance: integer("importance").default(1), // 1-5 scale
+  orderIndex: integer("order_index").default(0), // For drag-and-drop ordering
   tags: text("tags").array(),
   relatedCharacters: text("related_characters").array(),
   relatedLocations: text("related_locations").array(),

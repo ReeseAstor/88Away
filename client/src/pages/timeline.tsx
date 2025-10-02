@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import Sidebar from "@/components/sidebar";
 import { 
   Clock, 
@@ -22,11 +22,30 @@ import {
   Calendar,
   MapPin,
   Users,
-  Star,
+  GripVertical,
   ChevronDown,
   ChevronRight
 } from "lucide-react";
 import { Project, TimelineEvent } from "@shared/schema";
+import {
+  DndContext,
+  DragEndEvent,
+  DragStartEvent,
+  DragOverlay,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { cn } from "@/lib/utils";
 
 const importanceLevels = [
   { value: 1, label: "Minor", color: "bg-muted" },
@@ -36,16 +55,128 @@ const importanceLevels = [
   { value: 5, label: "Critical", color: "bg-destructive" }
 ];
 
+function SortableEventCard({ 
+  event, 
+  onEdit, 
+  onDelete 
+}: { 
+  event: TimelineEvent; 
+  onEdit: () => void; 
+  onDelete: () => void; 
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: event.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const getImportanceInfo = (importance: number) => {
+    return importanceLevels.find(level => level.value === importance) || importanceLevels[2];
+  };
+
+  const importanceInfo = getImportanceInfo(event.importance || 3);
+
+  return (
+    <div ref={setNodeRef} style={style} className="relative flex space-x-4" data-testid={`card-event-${event.id}`}>
+      <button
+        {...attributes}
+        {...listeners}
+        className="cursor-grab active:cursor-grabbing mt-1 text-muted-foreground hover:text-foreground z-10 flex-shrink-0"
+        data-testid={`drag-handle-${event.id}`}
+      >
+        <GripVertical className="h-5 w-5" />
+      </button>
+      <div className={`w-12 h-12 ${importanceInfo.color} rounded-lg flex items-center justify-center z-10 flex-shrink-0`}>
+        <Clock className="h-6 w-6 text-white" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <div className="flex items-center space-x-2 mb-1">
+              <h4 className="font-semibold text-card-foreground" data-testid={`text-event-title-${event.id}`}>
+                {event.title}
+              </h4>
+              <Badge variant="outline" className={importanceInfo.color}>
+                {importanceInfo.label}
+              </Badge>
+            </div>
+            {event.description && (
+              <p className="text-muted-foreground text-sm mb-2">
+                {event.description}
+              </p>
+            )}
+            
+            <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+              {event.relatedCharacters && event.relatedCharacters.length > 0 && (
+                <div className="flex items-center space-x-1">
+                  <Users className="h-3 w-3" />
+                  <span>{event.relatedCharacters.join(', ')}</span>
+                </div>
+              )}
+              {event.relatedLocations && event.relatedLocations.length > 0 && (
+                <div className="flex items-center space-x-1">
+                  <MapPin className="h-3 w-3" />
+                  <span>{event.relatedLocations.join(', ')}</span>
+                </div>
+              )}
+            </div>
+            
+            {event.tags && event.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {event.tags.map((tag, tagIndex) => (
+                  <Badge key={tagIndex} variant="secondary" className="text-xs">
+                    {tag}
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          <div className="flex items-center space-x-1 ml-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onEdit}
+              data-testid={`button-edit-event-${event.id}`}
+            >
+              <Edit className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onDelete}
+              data-testid={`button-delete-event-${event.id}`}
+            >
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Timeline() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const queryClientInstance = useQueryClient();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showEventModal, setShowEventModal] = useState(false);
   const [editingEvent, setEditingEvent] = useState<TimelineEvent | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterImportance, setFilterImportance] = useState("all");
   const [expandedYears, setExpandedYears] = useState<Set<string>>(new Set());
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [draggedEvent, setDraggedEvent] = useState<TimelineEvent | null>(null);
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -55,6 +186,18 @@ export default function Timeline() {
     relatedCharacters: "",
     relatedLocations: ""
   });
+
+  // Drag sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   // Redirect to home if not authenticated
   useEffect(() => {
@@ -99,7 +242,7 @@ export default function Timeline() {
       await apiRequest("POST", `/api/projects/${projects[0].id}/timeline`, eventData);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/timeline'] });
+      queryClientInstance.invalidateQueries({ queryKey: ['/api/timeline'] });
       setShowEventModal(false);
       setFormData({
         title: "",
@@ -140,7 +283,7 @@ export default function Timeline() {
       await apiRequest("PUT", `/api/timeline/${data.id}`, data.updates);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/timeline'] });
+      queryClientInstance.invalidateQueries({ queryKey: ['/api/timeline'] });
       setShowEventModal(false);
       setEditingEvent(null);
       toast({
@@ -173,7 +316,7 @@ export default function Timeline() {
       await apiRequest("DELETE", `/api/timeline/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/timeline'] });
+      queryClientInstance.invalidateQueries({ queryKey: ['/api/timeline'] });
       toast({
         title: "Success",
         description: "Event deleted successfully!",
@@ -195,6 +338,71 @@ export default function Timeline() {
         title: "Error",
         description: "Failed to delete event. Please try again.",
         variant: "destructive",
+      });
+    },
+  });
+
+  const reorderEventMutation = useMutation({
+    mutationFn: async (data: { 
+      eventId: string; 
+      targetId: string; 
+      targetDate: string | null;
+    }) => {
+      const targetEvent = events.find(e => e.id === data.targetId);
+      
+      if (!targetEvent) return;
+      
+      const newOrderIndex = targetEvent.orderIndex ?? 0;
+      const activeEvent = events.find(e => e.id === data.eventId);
+      const dateChanged = activeEvent && activeEvent.date !== targetEvent.date;
+      
+      await apiRequest("PATCH", `/api/timeline/${data.eventId}/reorder`, {
+        orderIndex: newOrderIndex,
+        ...(dateChanged && { date: targetEvent.date })
+      });
+    },
+    onMutate: async (data) => {
+      await queryClientInstance.cancelQueries({ queryKey: ['/api/timeline'] });
+      const previousEvents = queryClientInstance.getQueryData(['/api/timeline']);
+      
+      queryClientInstance.setQueryData(['/api/timeline'], (old: TimelineEvent[] | undefined) => {
+        if (!old) return old;
+        
+        const oldIndex = old.findIndex(e => e.id === data.eventId);
+        const newIndex = old.findIndex(e => e.id === data.targetId);
+        
+        if (oldIndex === -1 || newIndex === -1) return old;
+        
+        const newArray = [...old];
+        const [movedEvent] = newArray.splice(oldIndex, 1);
+        
+        const targetEvent = old[newIndex];
+        if (targetEvent && movedEvent.date !== targetEvent.date) {
+          movedEvent.date = targetEvent.date;
+        }
+        
+        newArray.splice(newIndex, 0, movedEvent);
+        
+        return newArray;
+      });
+      
+      return { previousEvents };
+    },
+    onError: (err, variables, context) => {
+      if (context?.previousEvents) {
+        queryClientInstance.setQueryData(['/api/timeline'], context.previousEvents);
+      }
+      toast({
+        title: "Error",
+        description: "Failed to reorder events. Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSuccess: () => {
+      queryClientInstance.invalidateQueries({ queryKey: ['/api/timeline'] });
+      toast({
+        title: "Success",
+        description: "Event reordered successfully!",
       });
     },
   });
@@ -256,33 +464,80 @@ export default function Timeline() {
     });
   };
 
-  const filteredEvents = events.filter((event: TimelineEvent) => {
-    const matchesSearch = event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      event.description?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesImportance = filterImportance === "all" || (event.importance || 3).toString() === filterImportance;
-    return matchesSearch && matchesImportance;
-  });
+  const handleDragStart = (event: DragStartEvent) => {
+    const { active } = event;
+    setActiveId(active.id as string);
+    const draggedEvt = events.find(e => e.id === active.id);
+    setDraggedEvent(draggedEvt || null);
+  };
 
-  // Group events by year/era
-  const groupedEvents = filteredEvents.reduce((acc: { [key: string]: TimelineEvent[] }, event: TimelineEvent) => {
-    const year = event.date || "Undated";
-    if (!acc[year]) {
-      acc[year] = [];
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (!over || active.id === over.id) {
+      setActiveId(null);
+      setDraggedEvent(null);
+      return;
     }
-    acc[year].push(event);
-    return acc;
-  }, {});
+
+    const activeEvent = events.find(e => e.id === active.id);
+    const overEvent = events.find(e => e.id === over.id);
+    
+    if (!activeEvent || !overEvent) {
+      setActiveId(null);
+      setDraggedEvent(null);
+      return;
+    }
+
+    reorderEventMutation.mutate({
+      eventId: activeEvent.id,
+      targetId: overEvent.id,
+      targetDate: overEvent.date || null,
+    });
+
+    setActiveId(null);
+    setDraggedEvent(null);
+  };
+
+  // Group events by year/era with sorting by orderIndex first, then importance
+  const groupedEvents = useMemo(() => {
+    const filtered = events.filter((event: TimelineEvent) => {
+      const matchesSearch = event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        event.description?.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesImportance = filterImportance === "all" || (event.importance || 3).toString() === filterImportance;
+      return matchesSearch && matchesImportance;
+    });
+
+    const grouped = filtered.reduce((acc: { [key: string]: TimelineEvent[] }, event: TimelineEvent) => {
+      const year = event.date || "Undated";
+      if (!acc[year]) {
+        acc[year] = [];
+      }
+      acc[year].push(event);
+      return acc;
+    }, {});
+
+    // Sort each group by orderIndex first, then importance
+    Object.keys(grouped).forEach(year => {
+      grouped[year].sort((a, b) => {
+        const aOrder = a.orderIndex ?? 0;
+        const bOrder = b.orderIndex ?? 0;
+        if (aOrder !== bOrder) return aOrder - bOrder;
+        return (b.importance ?? 3) - (a.importance ?? 3);
+      });
+    });
+
+    return grouped;
+  }, [events, searchTerm, filterImportance]);
 
   // Sort years/eras
-  const sortedYears = Object.keys(groupedEvents).sort((a, b) => {
-    if (a === "Undated") return 1;
-    if (b === "Undated") return -1;
-    return a.localeCompare(b);
-  });
-
-  const getImportanceInfo = (importance: number) => {
-    return importanceLevels.find(level => level.value === importance) || importanceLevels[2];
-  };
+  const sortedYears = useMemo(() => {
+    return Object.keys(groupedEvents).sort((a, b) => {
+      if (a === "Undated") return 1;
+      if (b === "Undated") return -1;
+      return a.localeCompare(b);
+    });
+  }, [groupedEvents]);
 
   const toggleYear = (year: string) => {
     const newExpanded = new Set(expandedYears);
@@ -385,7 +640,7 @@ export default function Timeline() {
                 </Card>
               ))}
             </div>
-          ) : filteredEvents.length === 0 ? (
+          ) : Object.keys(groupedEvents).length === 0 ? (
             <div className="text-center py-16" data-testid="empty-events-state">
               <Clock className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-medium text-card-foreground mb-2">
@@ -408,122 +663,87 @@ export default function Timeline() {
               )}
             </div>
           ) : (
-            <div className="space-y-6">
-              {sortedYears.map((year) => {
-                const yearEvents = groupedEvents[year].sort((a, b) => (b.importance || 3) - (a.importance || 3));
-                const isExpanded = expandedYears.has(year);
-                
-                return (
-                  <Card key={year} data-testid={`card-year-${year}`}>
-                    <CardHeader 
-                      className="cursor-pointer hover:bg-muted/30 transition-colors"
-                      onClick={() => toggleYear(year)}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          {isExpanded ? (
-                            <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                          ) : (
-                            <ChevronRight className="h-5 w-5 text-muted-foreground" />
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+            >
+              <div className="space-y-6">
+                {sortedYears.map((year) => {
+                  const yearEvents = groupedEvents[year];
+                  const isExpanded = expandedYears.has(year);
+                  
+                  return (
+                    <Card key={year} data-testid={`card-year-${year}`}>
+                      <CardHeader 
+                        className="cursor-pointer hover:bg-muted/30 transition-colors"
+                        onClick={() => toggleYear(year)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            {isExpanded ? (
+                              <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                            ) : (
+                              <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                            )}
+                            <div className="flex items-center space-x-2">
+                              <Calendar className="h-5 w-5 text-accent" />
+                              <CardTitle className="text-xl">{year}</CardTitle>
+                            </div>
+                          </div>
+                          <Badge variant="outline">
+                            {yearEvents.length} event{yearEvents.length !== 1 ? 's' : ''}
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      
+                      {isExpanded && (
+                        <CardContent className="space-y-4">
+                          <div className="relative">
+                            <div className="absolute left-6 top-0 bottom-0 w-px bg-border"></div>
+                            <SortableContext
+                              items={yearEvents.map(e => e.id)}
+                              strategy={verticalListSortingStrategy}
+                            >
+                              <div className="space-y-6">
+                                {yearEvents.map((event) => (
+                                  <SortableEventCard
+                                    key={event.id}
+                                    event={event}
+                                    onEdit={() => handleEdit(event)}
+                                    onDelete={() => handleDelete(event)}
+                                  />
+                                ))}
+                              </div>
+                            </SortableContext>
+                          </div>
+                        </CardContent>
+                      )}
+                    </Card>
+                  );
+                })}
+              </div>
+              <DragOverlay>
+                {draggedEvent ? (
+                  <Card className="shadow-2xl opacity-90">
+                    <CardContent className="p-4">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+                          <Clock className="h-5 w-5 text-white" />
+                        </div>
+                        <div>
+                          <h4 className="font-semibold">{draggedEvent.title}</h4>
+                          {draggedEvent.date && (
+                            <p className="text-sm text-muted-foreground">{draggedEvent.date}</p>
                           )}
-                          <div className="flex items-center space-x-2">
-                            <Calendar className="h-5 w-5 text-accent" />
-                            <CardTitle className="text-xl">{year}</CardTitle>
-                          </div>
                         </div>
-                        <Badge variant="outline">
-                          {yearEvents.length} event{yearEvents.length !== 1 ? 's' : ''}
-                        </Badge>
                       </div>
-                    </CardHeader>
-                    
-                    {isExpanded && (
-                      <CardContent className="space-y-4">
-                        <div className="relative">
-                          <div className="absolute left-6 top-0 bottom-0 w-px bg-border"></div>
-                          <div className="space-y-6">
-                            {yearEvents.map((event, index) => {
-                              const importanceInfo = getImportanceInfo(event.importance || 3);
-                              
-                              return (
-                                <div key={event.id} className="relative flex space-x-4" data-testid={`card-event-${event.id}`}>
-                                  <div className={`w-12 h-12 ${importanceInfo.color} rounded-lg flex items-center justify-center z-10`}>
-                                    <Clock className="h-6 w-6 text-white" />
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-start justify-between">
-                                      <div className="flex-1">
-                                        <div className="flex items-center space-x-2 mb-1">
-                                          <h4 className="font-semibold text-card-foreground" data-testid={`text-event-title-${event.id}`}>
-                                            {event.title}
-                                          </h4>
-                                          <Badge variant="outline" className={importanceInfo.color}>
-                                            {importanceInfo.label}
-                                          </Badge>
-                                        </div>
-                                        {event.description && (
-                                          <p className="text-muted-foreground text-sm mb-2">
-                                            {event.description}
-                                          </p>
-                                        )}
-                                        
-                                        <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                                          {event.relatedCharacters && event.relatedCharacters.length > 0 && (
-                                            <div className="flex items-center space-x-1">
-                                              <Users className="h-3 w-3" />
-                                              <span>{event.relatedCharacters.join(', ')}</span>
-                                            </div>
-                                          )}
-                                          {event.relatedLocations && event.relatedLocations.length > 0 && (
-                                            <div className="flex items-center space-x-1">
-                                              <MapPin className="h-3 w-3" />
-                                              <span>{event.relatedLocations.join(', ')}</span>
-                                            </div>
-                                          )}
-                                        </div>
-                                        
-                                        {event.tags && event.tags.length > 0 && (
-                                          <div className="flex flex-wrap gap-1 mt-2">
-                                            {event.tags.map((tag, tagIndex) => (
-                                              <Badge key={tagIndex} variant="secondary" className="text-xs">
-                                                {tag}
-                                              </Badge>
-                                            ))}
-                                          </div>
-                                        )}
-                                      </div>
-                                      
-                                      <div className="flex items-center space-x-1 ml-4">
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() => handleEdit(event)}
-                                          data-testid={`button-edit-event-${event.id}`}
-                                        >
-                                          <Edit className="h-4 w-4" />
-                                        </Button>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() => handleDelete(event)}
-                                          data-testid={`button-delete-event-${event.id}`}
-                                        >
-                                          <Trash2 className="h-4 w-4 text-destructive" />
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </CardContent>
-                    )}
+                    </CardContent>
                   </Card>
-                );
-              })}
-            </div>
+                ) : null}
+              </DragOverlay>
+            </DndContext>
           )}
         </div>
       </main>
@@ -587,9 +807,9 @@ export default function Timeline() {
                 id="description"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Describe what happened during this event..."
-                className="resize-none h-24"
-                data-testid="input-event-description"
+                placeholder="Describe what happens in this event"
+                rows={3}
+                data-testid="textarea-event-description"
               />
             </div>
             
@@ -626,25 +846,21 @@ export default function Timeline() {
               />
             </div>
             
-            <div className="flex items-center justify-end space-x-3 pt-4 border-t border-border">
+            <div className="flex justify-end space-x-2 pt-4">
               <Button 
                 type="button" 
                 variant="outline" 
                 onClick={handleCloseModal}
-                disabled={createEventMutation.isPending || updateEventMutation.isPending}
                 data-testid="button-cancel-event"
               >
                 Cancel
               </Button>
               <Button 
-                type="submit" 
-                disabled={createEventMutation.isPending || updateEventMutation.isPending || !formData.title.trim()}
+                type="submit"
+                disabled={createEventMutation.isPending || updateEventMutation.isPending}
                 data-testid="button-save-event"
               >
-                {createEventMutation.isPending || updateEventMutation.isPending
-                  ? "Saving..." 
-                  : editingEvent ? "Update Event" : "Create Event"
-                }
+                {createEventMutation.isPending || updateEventMutation.isPending ? "Saving..." : (editingEvent ? "Update Event" : "Create Event")}
               </Button>
             </div>
           </form>

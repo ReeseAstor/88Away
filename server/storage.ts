@@ -92,6 +92,7 @@ export interface IStorage {
   createTimelineEvent(event: InsertTimelineEvent): Promise<TimelineEvent>;
   updateTimelineEvent(id: string, updates: Partial<InsertTimelineEvent>): Promise<TimelineEvent>;
   deleteTimelineEvent(id: string): Promise<void>;
+  reorderTimelineEvents(projectId: string, eventId: string, newIndex: number, newDate?: string): Promise<TimelineEvent>;
 
   // Document operations
   getProjectDocuments(projectId: string): Promise<Document[]>;
@@ -474,9 +475,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createTimelineEvent(event: InsertTimelineEvent): Promise<TimelineEvent> {
+    let orderIndex = event.orderIndex ?? 0;
+    
+    if (orderIndex === 0 && event.projectId) {
+      const maxOrderResult = await db
+        .select({ maxOrder: sql<number>`COALESCE(MAX(${timelineEvents.orderIndex}), -1)` })
+        .from(timelineEvents)
+        .where(eq(timelineEvents.projectId, event.projectId));
+      
+      orderIndex = (maxOrderResult[0]?.maxOrder ?? -1) + 1;
+    }
+    
     const [newEvent] = await db
       .insert(timelineEvents)
-      .values(event)
+      .values({ ...event, orderIndex })
       .returning();
     return newEvent;
   }
@@ -492,6 +504,81 @@ export class DatabaseStorage implements IStorage {
 
   async deleteTimelineEvent(id: string): Promise<void> {
     await db.delete(timelineEvents).where(eq(timelineEvents.id, id));
+  }
+
+  async reorderTimelineEvents(projectId: string, eventId: string, newIndex: number, newDate?: string): Promise<TimelineEvent> {
+    return await db.transaction(async (tx) => {
+      // 1. SECURITY: Verify event belongs to project
+      const [event] = await tx
+        .select()
+        .from(timelineEvents)
+        .where(
+          and(
+            eq(timelineEvents.id, eventId),
+            eq(timelineEvents.projectId, projectId)
+          )
+        )
+        .limit(1);
+
+      if (!event) {
+        throw new Error("Event not found or access denied");
+      }
+
+      // 2. Get ALL events in the project, sorted by current order
+      const allEvents = await tx
+        .select()
+        .from(timelineEvents)
+        .where(eq(timelineEvents.projectId, projectId))
+        .orderBy(timelineEvents.orderIndex, timelineEvents.createdAt);
+
+      // 3. CRITICAL: Rearrange array to reflect drag-and-drop
+      // Remove the moved event from its current position
+      const movedEvent = allEvents.find(e => e.id === eventId);
+      if (!movedEvent) {
+        throw new Error("Event not found in project events");
+      }
+
+      const eventsWithoutMoved = allEvents.filter(e => e.id !== eventId);
+      
+      // Insert the moved event at the new position
+      eventsWithoutMoved.splice(newIndex, 0, movedEvent);
+
+      // 4. Resequence the rearranged array with contiguous indices
+      for (let i = 0; i < eventsWithoutMoved.length; i++) {
+        const evt = eventsWithoutMoved[i];
+        
+        // Prepare update data
+        const updateData: any = {
+          orderIndex: i,
+        };
+        
+        // If this is the moved event AND date should change, update it
+        if (evt.id === eventId && newDate !== undefined) {
+          updateData.date = newDate;
+        }
+        
+        // Only update if something changed
+        const needsUpdate = 
+          evt.orderIndex !== i || 
+          (evt.id === eventId && newDate !== undefined && evt.date !== newDate);
+        
+        if (needsUpdate) {
+          await tx
+            .update(timelineEvents)
+            .set(updateData)
+            .where(eq(timelineEvents.id, evt.id));
+        }
+      }
+
+      // 5. Return the updated event
+      const [finalEvent] = await tx
+        .select()
+        .from(timelineEvents)
+        .where(eq(timelineEvents.id, eventId))
+        .limit(1);
+
+      return finalEvent!;
+    });
   }
 
   // Document operations
