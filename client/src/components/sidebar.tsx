@@ -18,7 +18,8 @@ import {
   Menu,
   Plus
 } from "lucide-react";
-import logo from "@/assets/88away-logo.png";
+import logo from "@/assets/88away-logo-white.png";
+import logoIcon from "@/assets/88away-icon.png";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -133,11 +134,19 @@ export default function Sidebar({ collapsed, onToggleCollapse, currentPath }: Si
       <div className="p-4 border-b border-secondary/20">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <img 
-              src={logo} 
-              alt="88Away Logo" 
-              className="h-8 w-auto brightness-0 invert opacity-90"
-            />
+            {collapsed ? (
+              <img 
+                src={logoIcon} 
+                alt="88Away" 
+                className="h-8 w-auto brightness-0 invert opacity-90"
+              />
+            ) : (
+              <img 
+                src={logo} 
+                alt="88Away Logo" 
+                className="h-8 w-auto brightness-0 invert opacity-90"
+              />
+            )}
           </div>
           <Button
             variant="ghost"
