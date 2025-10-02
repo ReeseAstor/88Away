@@ -1,9 +1,11 @@
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import UnderlineExtension from '@tiptap/extension-underline';
+import TextAlign from '@tiptap/extension-text-align';
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import * as Y from 'yjs';
 import * as awarenessProtocol from 'y-protocols/awareness';
 import { YjsCollaboration } from './yjs-collaboration-extension';
@@ -11,6 +13,7 @@ import {
   Bold, 
   Italic, 
   Underline, 
+  Strikethrough,
   List, 
   ListOrdered,
   Quote,
@@ -24,7 +27,12 @@ import {
   Circle,
   Eye,
   Edit3,
-  MessageSquare
+  MessageSquare,
+  Code,
+  Code2,
+  Minus,
+  Check,
+  Loader2
 } from "lucide-react";
 
 interface RichTextEditorProps {
@@ -62,6 +70,12 @@ export default function RichTextEditor({
   onCommentClick
 }: RichTextEditorProps) {
   
+  // Autosave state management
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'typing' | 'saving'>('saved');
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Configure extensions based on collaborative mode
   const extensions = useMemo(() => {
     const baseExtensions = [];
@@ -79,16 +93,20 @@ export default function RichTextEditor({
           }
         })
       );
-      // Add StarterKit but disable history since Yjs handles undo/redo
-      baseExtensions.push(
-        StarterKit.configure({
-          history: false
-        })
-      );
+      // Add StarterKit - Yjs extension handles history
+      baseExtensions.push(StarterKit);
     } else {
       // Non-collaborative mode - use regular StarterKit with history
       baseExtensions.push(StarterKit);
     }
+    
+    // Add additional formatting extensions
+    baseExtensions.push(
+      UnderlineExtension,
+      TextAlign.configure({
+        types: ['heading', 'paragraph'],
+      })
+    );
     
     return baseExtensions;
   }, [isCollaborative, ydoc, awareness, xmlFragment, userName, userColor]);
@@ -98,8 +116,30 @@ export default function RichTextEditor({
     content: isCollaborative ? undefined : content, // Don't set initial content in collaborative mode
     editable: !readOnly && userRole !== 'reader',
     onUpdate: ({ editor }) => {
-      // Always notify parent of changes
+      // IMMEDIATELY save data - no debouncing for data persistence
       onChange(editor.getHTML());
+      
+      // Set typing status immediately (UI feedback)
+      setSaveStatus('typing');
+      
+      // Clear existing timeouts
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+      
+      // After 500ms of no typing, change to saving (cosmetic only)
+      typingTimeoutRef.current = setTimeout(() => {
+        setSaveStatus('saving');
+        
+        // After another 300ms, mark as saved (cosmetic only)
+        saveTimeoutRef.current = setTimeout(() => {
+          setSaveStatus('saved');
+          setLastSaved(new Date());
+        }, 300);
+      }, 500);
     },
     editorProps: {
       attributes: {
@@ -108,6 +148,14 @@ export default function RichTextEditor({
       },
     },
   });
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
+  }, []);
 
   // Update content for non-collaborative mode
   useEffect(() => {
@@ -175,114 +223,238 @@ export default function RichTextEditor({
       )}
       
       {/* Toolbar */}
-      <div className="border-b border-border p-2 flex items-center space-x-1 flex-wrap">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => editor.chain().focus().toggleBold().run()}
-          className={editor.isActive('bold') ? 'bg-muted' : ''}
-          disabled={readOnly || userRole === 'reader'}
-          data-testid="button-bold"
-        >
-          <Bold className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => editor.chain().focus().toggleItalic().run()}
-          className={editor.isActive('italic') ? 'bg-muted' : ''}
-          disabled={readOnly || userRole === 'reader'}
-          data-testid="button-italic"
-        >
-          <Italic className="h-4 w-4" />
-        </Button>
+      <div className="border-b border-border p-2 flex items-center justify-between flex-wrap gap-1">
+        <div className="flex items-center space-x-1 flex-wrap">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => editor.chain().focus().toggleBold().run()}
+            className={editor.isActive('bold') ? 'bg-muted' : ''}
+            disabled={readOnly || userRole === 'reader'}
+            data-testid="button-bold"
+          >
+            <Bold className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => editor.chain().focus().toggleItalic().run()}
+            className={editor.isActive('italic') ? 'bg-muted' : ''}
+            disabled={readOnly || userRole === 'reader'}
+            data-testid="button-italic"
+          >
+            <Italic className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => editor.chain().focus().toggleUnderline().run()}
+            className={editor.isActive('underline') ? 'bg-muted' : ''}
+            disabled={readOnly || userRole === 'reader'}
+            data-testid="button-underline"
+          >
+            <Underline className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => editor.chain().focus().toggleStrike().run()}
+            className={editor.isActive('strike') ? 'bg-muted' : ''}
+            disabled={readOnly || userRole === 'reader'}
+            data-testid="button-strikethrough"
+          >
+            <Strikethrough className="h-4 w-4" />
+          </Button>
+          
+          <Separator orientation="vertical" className="h-6" />
+          
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+            className={editor.isActive('heading', { level: 1 }) ? 'bg-muted' : ''}
+            disabled={readOnly || userRole === 'reader'}
+            data-testid="button-h1"
+          >
+            H1
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+            className={editor.isActive('heading', { level: 2 }) ? 'bg-muted' : ''}
+            disabled={readOnly || userRole === 'reader'}
+            data-testid="button-h2"
+          >
+            H2
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+            className={editor.isActive('heading', { level: 3 }) ? 'bg-muted' : ''}
+            disabled={readOnly || userRole === 'reader'}
+            data-testid="button-h3"
+          >
+            H3
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => editor.chain().focus().setParagraph().run()}
+            className={editor.isActive('paragraph') ? 'bg-muted' : ''}
+            disabled={readOnly || userRole === 'reader'}
+            data-testid="button-paragraph"
+          >
+            <Type className="h-4 w-4" />
+          </Button>
+          
+          <Separator orientation="vertical" className="h-6" />
+          
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => editor.chain().focus().toggleCode().run()}
+            className={editor.isActive('code') ? 'bg-muted' : ''}
+            disabled={readOnly || userRole === 'reader'}
+            data-testid="button-code"
+          >
+            <Code className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+            className={editor.isActive('codeBlock') ? 'bg-muted' : ''}
+            disabled={readOnly || userRole === 'reader'}
+            data-testid="button-code-block"
+          >
+            <Code2 className="h-4 w-4" />
+          </Button>
+          
+          <Separator orientation="vertical" className="h-6" />
+          
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => editor.chain().focus().setTextAlign('left').run()}
+            className={editor.isActive({ textAlign: 'left' }) ? 'bg-muted' : ''}
+            disabled={readOnly || userRole === 'reader'}
+            data-testid="button-align-left"
+          >
+            <AlignLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => editor.chain().focus().setTextAlign('center').run()}
+            className={editor.isActive({ textAlign: 'center' }) ? 'bg-muted' : ''}
+            disabled={readOnly || userRole === 'reader'}
+            data-testid="button-align-center"
+          >
+            <AlignCenter className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => editor.chain().focus().setTextAlign('right').run()}
+            className={editor.isActive({ textAlign: 'right' }) ? 'bg-muted' : ''}
+            disabled={readOnly || userRole === 'reader'}
+            data-testid="button-align-right"
+          >
+            <AlignRight className="h-4 w-4" />
+          </Button>
+          
+          <Separator orientation="vertical" className="h-6" />
+          
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => editor.chain().focus().toggleBulletList().run()}
+            className={editor.isActive('bulletList') ? 'bg-muted' : ''}
+            disabled={readOnly || userRole === 'reader'}
+            data-testid="button-bullet-list"
+          >
+            <List className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => editor.chain().focus().toggleOrderedList().run()}
+            className={editor.isActive('orderedList') ? 'bg-muted' : ''}
+            disabled={readOnly || userRole === 'reader'}
+            data-testid="button-ordered-list"
+          >
+            <ListOrdered className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => editor.chain().focus().toggleBlockquote().run()}
+            className={editor.isActive('blockquote') ? 'bg-muted' : ''}
+            disabled={readOnly || userRole === 'reader'}
+            data-testid="button-quote"
+          >
+            <Quote className="h-4 w-4" />
+          </Button>
+          
+          <Separator orientation="vertical" className="h-6" />
+          
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => editor.chain().focus().setHorizontalRule().run()}
+            disabled={readOnly || userRole === 'reader'}
+            data-testid="button-horizontal-rule"
+          >
+            <Minus className="h-4 w-4" />
+          </Button>
+          
+          <Separator orientation="vertical" className="h-6" />
+          
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => editor.chain().focus().undo().run()}
+            disabled={!editor.can().undo() || readOnly || userRole === 'reader'}
+            data-testid="button-undo"
+          >
+            <Undo className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => editor.chain().focus().redo().run()}
+            disabled={!editor.can().redo() || readOnly || userRole === 'reader'}
+            data-testid="button-redo"
+          >
+            <Redo className="h-4 w-4" />
+          </Button>
+        </div>
         
-        <Separator orientation="vertical" className="h-6" />
-        
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-          className={editor.isActive('heading', { level: 1 }) ? 'bg-muted' : ''}
-          disabled={readOnly || userRole === 'reader'}
-          data-testid="button-h1"
-        >
-          H1
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-          className={editor.isActive('heading', { level: 2 }) ? 'bg-muted' : ''}
-          disabled={readOnly || userRole === 'reader'}
-          data-testid="button-h2"
-        >
-          H2
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => editor.chain().focus().setParagraph().run()}
-          className={editor.isActive('paragraph') ? 'bg-muted' : ''}
-          disabled={readOnly || userRole === 'reader'}
-          data-testid="button-paragraph"
-        >
-          <Type className="h-4 w-4" />
-        </Button>
-        
-        <Separator orientation="vertical" className="h-6" />
-        
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => editor.chain().focus().toggleBulletList().run()}
-          className={editor.isActive('bulletList') ? 'bg-muted' : ''}
-          disabled={readOnly || userRole === 'reader'}
-          data-testid="button-bullet-list"
-        >
-          <List className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => editor.chain().focus().toggleOrderedList().run()}
-          className={editor.isActive('orderedList') ? 'bg-muted' : ''}
-          disabled={readOnly || userRole === 'reader'}
-          data-testid="button-ordered-list"
-        >
-          <ListOrdered className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => editor.chain().focus().toggleBlockquote().run()}
-          className={editor.isActive('blockquote') ? 'bg-muted' : ''}
-          disabled={readOnly || userRole === 'reader'}
-          data-testid="button-quote"
-        >
-          <Quote className="h-4 w-4" />
-        </Button>
-        
-        <Separator orientation="vertical" className="h-6" />
-        
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => editor.chain().focus().undo().run()}
-          disabled={!editor.can().undo() || readOnly || userRole === 'reader'}
-          data-testid="button-undo"
-        >
-          <Undo className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => editor.chain().focus().redo().run()}
-          disabled={!editor.can().redo() || readOnly || userRole === 'reader'}
-          data-testid="button-redo"
-        >
-          <Redo className="h-4 w-4" />
-        </Button>
+        {/* Autosave Indicator */}
+        {!isCollaborative && (
+          <div className="flex items-center space-x-1.5 text-xs text-muted-foreground" data-testid="autosave-indicator">
+            {saveStatus === 'typing' && (
+              <>
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>Typing...</span>
+              </>
+            )}
+            {saveStatus === 'saving' && (
+              <>
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>Saving...</span>
+              </>
+            )}
+            {saveStatus === 'saved' && lastSaved && (
+              <>
+                <Check className="h-3 w-3 text-green-500" />
+                <span>Saved {lastSaved.toLocaleTimeString()}</span>
+              </>
+            )}
+          </div>
+        )}
       </div>
       
       {/* Editor Content with Live Cursors Overlay */}
