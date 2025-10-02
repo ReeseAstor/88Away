@@ -36,7 +36,11 @@ export interface ProjectAnalytics {
       persona: string;
       prompt: string;
       createdAt: string;
+      metadata?: any;
     }>;
+    tokenUsageOverTime?: Array<{ date: string; tokens: number; cost: number }>;
+    totalTokensUsed?: number;
+    estimatedCost?: number;
   };
   collaboration: {
     totalCollaborators: number;
@@ -199,7 +203,10 @@ export class AnalyticsService {
   }
 
   private static async getAiUsageMetrics(projectId: string) {
-    const [totalCount, byPersona, recent] = await Promise.all([
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    const [totalCount, byPersona, recent, allGenerations] = await Promise.all([
       db.select({ count: count() }).from(aiGenerations).where(eq(aiGenerations.projectId, projectId)),
       db.select({
         persona: aiGenerations.persona,
@@ -213,12 +220,56 @@ export class AnalyticsService {
         persona: aiGenerations.persona,
         prompt: aiGenerations.prompt,
         createdAt: aiGenerations.createdAt,
+        metadata: aiGenerations.metadata,
       })
         .from(aiGenerations)
         .where(eq(aiGenerations.projectId, projectId))
         .orderBy(desc(aiGenerations.createdAt))
         .limit(10),
+      db.select({
+        createdAt: aiGenerations.createdAt,
+        metadata: aiGenerations.metadata,
+      })
+        .from(aiGenerations)
+        .where(
+          and(
+            eq(aiGenerations.projectId, projectId),
+            gte(aiGenerations.createdAt, thirtyDaysAgo)
+          )
+        )
+        .orderBy(aiGenerations.createdAt),
     ]);
+
+    // Calculate token usage over time
+    const tokenUsageByDate = new Map<string, { tokens: number; cost: number }>();
+    let totalTokensUsed = 0;
+
+    for (const gen of allGenerations) {
+      if (gen.metadata && typeof gen.metadata === 'object') {
+        const metadata = gen.metadata as any;
+        const tokensIn = metadata.tokens_in || 0;
+        const tokensOut = metadata.tokens_out || 0;
+        const totalTokens = tokensIn + tokensOut;
+        totalTokensUsed += totalTokens;
+
+        const date = gen.createdAt?.toISOString().split('T')[0] || '';
+        const existing = tokenUsageByDate.get(date) || { tokens: 0, cost: 0 };
+        const cost = (totalTokens / 1000) * 0.002; // $0.002 per 1K tokens estimate
+        
+        tokenUsageByDate.set(date, {
+          tokens: existing.tokens + totalTokens,
+          cost: existing.cost + cost,
+        });
+      }
+    }
+
+    const tokenUsageOverTime = Array.from(tokenUsageByDate.entries()).map(([date, data]) => ({
+      date,
+      tokens: data.tokens,
+      cost: data.cost,
+    }));
+
+    const estimatedCost = (totalTokensUsed / 1000) * 0.002;
 
     return {
       totalGenerations: totalCount[0]?.count || 0,
@@ -231,7 +282,11 @@ export class AnalyticsService {
         persona: row.persona,
         prompt: row.prompt.substring(0, 100) + '...',
         createdAt: row.createdAt?.toISOString() || '',
+        metadata: row.metadata,
       })),
+      tokenUsageOverTime,
+      totalTokensUsed,
+      estimatedCost,
     };
   }
 

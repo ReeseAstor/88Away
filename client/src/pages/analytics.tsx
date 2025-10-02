@@ -19,7 +19,9 @@ import {
   PenTool,
   ArrowLeft,
   Crown,
-  Zap
+  Zap,
+  DollarSign,
+  TrendingDown
 } from 'lucide-react';
 import {
   LineChart,
@@ -63,7 +65,11 @@ interface ProjectAnalytics {
       persona: string;
       prompt: string;
       createdAt: string;
+      metadata?: any;
     }>;
+    tokenUsageOverTime?: Array<{ date: string; tokens: number; cost: number }>;
+    totalTokensUsed?: number;
+    estimatedCost?: number;
   };
   collaboration: {
     totalCollaborators: number;
@@ -349,7 +355,86 @@ export default function AnalyticsPage() {
           </TabsContent>
 
           <TabsContent value="ai" className="space-y-6">
+            {/* Token Usage & Cost Overview Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur border-purple-200 dark:border-purple-800">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                    Total Tokens Used
+                  </CardTitle>
+                  <Zap className="h-4 w-4 text-purple-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-slate-900 dark:text-slate-100" data-testid="text-total-tokens">
+                    {analytics.aiUsage.totalTokensUsed?.toLocaleString() || '0'}
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400">
+                    Across all AI generations
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur border-green-200 dark:border-green-800">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                    Estimated Cost
+                  </CardTitle>
+                  <DollarSign className="h-4 w-4 text-green-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-slate-900 dark:text-slate-100" data-testid="text-estimated-cost">
+                    ${(analytics.aiUsage.estimatedCost || 0).toFixed(3)}
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400">
+                    Based on current token usage
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Token Usage Over Time */}
+              {analytics.aiUsage.tokenUsageOverTime && analytics.aiUsage.tokenUsageOverTime.length > 0 && (
+                <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <TrendingDown className="h-5 w-5 text-blue-600" />
+                      Token Usage Trend
+                    </CardTitle>
+                    <CardDescription>
+                      Daily token consumption over the last 30 days
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <LineChart data={analytics.aiUsage.tokenUsageOverTime}>
+                        <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                        <XAxis 
+                          dataKey="date" 
+                          className="text-xs"
+                          tick={{ fontSize: 12 }}
+                        />
+                        <YAxis className="text-xs" tick={{ fontSize: 12 }} />
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: '8px'
+                          }}
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey="tokens" 
+                          stroke="#8b5cf6" 
+                          strokeWidth={2}
+                          dot={{ fill: '#8b5cf6' }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              )}
+
               {/* AI Usage by Persona */}
               <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur">
                 <CardHeader>
@@ -383,7 +468,7 @@ export default function AnalyticsPage() {
                   </ResponsiveContainer>
                   <div className="flex justify-center gap-4 mt-4">
                     {analytics.aiUsage.byPersona.map((entry, index) => (
-                      <div key={entry.persona} className="flex items-center gap-2">
+                      <div key={entry.persona} className="flex items-center gap-2" data-testid={`persona-${entry.persona}`}>
                         <div 
                           className="w-3 h-3 rounded-full"
                           style={{ backgroundColor: COLORS[index % COLORS.length] }}
@@ -403,36 +488,93 @@ export default function AnalyticsPage() {
                     Recent AI Activity
                   </CardTitle>
                   <CardDescription>
-                    Latest AI-generated content
+                    Latest AI-generated content with token usage
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <ScrollArea className="h-[250px]">
                     <div className="space-y-3">
-                      {analytics.aiUsage.recent.map((generation) => (
-                        <div key={generation.id} className="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              <span className="text-lg">
-                                {personaIcons[generation.persona as keyof typeof personaIcons]}
+                      {analytics.aiUsage.recent.map((generation) => {
+                        const tokens = generation.metadata?.tokens_in + generation.metadata?.tokens_out || 0;
+                        const cost = (tokens / 1000) * 0.002;
+                        
+                        return (
+                          <div key={generation.id} className="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg" data-testid={`generation-${generation.id}`}>
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-lg">
+                                  {personaIcons[generation.persona as keyof typeof personaIcons]}
+                                </span>
+                                <Badge variant="outline" className="text-xs capitalize">
+                                  {generation.persona}
+                                </Badge>
+                                {tokens > 0 && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    {tokens.toLocaleString()} tokens
+                                  </Badge>
+                                )}
+                              </div>
+                              <span className="text-xs text-slate-500">
+                                {formatDistanceToNow(new Date(generation.createdAt), { addSuffix: true })}
                               </span>
-                              <Badge variant="outline" className="text-xs capitalize">
-                                {generation.persona}
-                              </Badge>
                             </div>
-                            <span className="text-xs text-slate-500">
-                              {formatDistanceToNow(new Date(generation.createdAt), { addSuffix: true })}
-                            </span>
+                            <p className="text-sm text-slate-600 dark:text-slate-400 truncate">
+                              {generation.prompt}
+                            </p>
+                            {cost > 0 && (
+                              <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                                ~${cost.toFixed(4)} cost
+                              </p>
+                            )}
                           </div>
-                          <p className="text-sm text-slate-600 dark:text-slate-400 truncate">
-                            {generation.prompt}
-                          </p>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </ScrollArea>
                 </CardContent>
               </Card>
+
+              {/* Cost Analysis */}
+              {analytics.aiUsage.tokenUsageOverTime && analytics.aiUsage.tokenUsageOverTime.length > 0 && (
+                <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <DollarSign className="h-5 w-5 text-green-600" />
+                      Cost Analysis
+                    </CardTitle>
+                    <CardDescription>
+                      Estimated daily AI costs
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <BarChart data={analytics.aiUsage.tokenUsageOverTime}>
+                        <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                        <XAxis 
+                          dataKey="date" 
+                          className="text-xs"
+                          tick={{ fontSize: 12 }}
+                        />
+                        <YAxis className="text-xs" tick={{ fontSize: 12 }} />
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: '8px'
+                          }}
+                          formatter={(value: number) => `$${value.toFixed(4)}`}
+                        />
+                        <Bar dataKey="cost" fill="#10b981" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                    <div className="mt-4 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+                      <p className="text-xs text-slate-600 dark:text-slate-400">
+                        * Estimated at $0.002 per 1K tokens (GPT-4 avg)
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </TabsContent>
 

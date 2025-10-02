@@ -14,6 +14,14 @@ const AVAILABLE_MODELS = [
 
 let workingModel: string | null = null;
 
+// AI usage limits by subscription plan
+export const AI_LIMITS = {
+  free: { monthly_generations: 20 },
+  starter: { monthly_generations: 100 },
+  professional: { monthly_generations: 500 },
+  enterprise: { monthly_generations: -1 } // unlimited
+};
+
 function getOpenAIClient(): OpenAI {
   if (!openai) {
     if (!process.env.OPENAI_API_KEY) {

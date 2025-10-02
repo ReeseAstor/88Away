@@ -1410,6 +1410,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const { intent, persona, project_id, context_refs, params, userPrompt } = req.body;
 
+      // Get user info to check subscription plan
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Check usage limits
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+      
+      const usage = await storage.getUserAiUsage(userId, startOfMonth);
+      const { AI_LIMITS } = await import('./openai');
+      const userPlan = (user.subscriptionPlan || 'free') as keyof typeof AI_LIMITS;
+      const limit = AI_LIMITS[userPlan]?.monthly_generations || AI_LIMITS.free.monthly_generations;
+      
+      // Enforce limit (unless unlimited)
+      if (limit !== -1 && usage.count >= limit) {
+        return res.status(429).json({ 
+          message: "AI usage limit reached for this month",
+          used: usage.count,
+          limit: limit
+        });
+      }
+
       // Validate project access and fetch project context
       let projectContext;
       if (project_id) {
@@ -1454,6 +1479,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error generating AI content:", error);
       res.status(500).json({ message: "Failed to generate content" });
+    }
+  });
+
+  // GET /api/ai/usage - Get user's current AI usage and limits
+  app.get('/api/ai/usage', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Get current month usage
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+      
+      const usage = await storage.getUserAiUsage(userId, startOfMonth);
+      const { AI_LIMITS } = await import('./openai');
+      const userPlan = (user.subscriptionPlan || 'free') as keyof typeof AI_LIMITS;
+      const limit = AI_LIMITS[userPlan]?.monthly_generations || AI_LIMITS.free.monthly_generations;
+      
+      // Calculate reset date (first day of next month)
+      const resetDate = new Date(startOfMonth);
+      resetDate.setMonth(resetDate.getMonth() + 1);
+      
+      res.json({
+        used: usage.count,
+        limit: limit,
+        remaining: limit === -1 ? -1 : Math.max(0, limit - usage.count),
+        tokens_used: usage.totalTokens,
+        resetDate: resetDate.toISOString(),
+        plan: userPlan
+      });
+    } catch (error) {
+      console.error("Error fetching AI usage:", error);
+      res.status(500).json({ message: "Failed to fetch AI usage" });
     }
   });
 
