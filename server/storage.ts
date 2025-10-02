@@ -44,6 +44,7 @@ import {
   type CollaborationPresence,
   type InsertCollaborationPresence,
 } from "@shared/schema";
+import { calculateWordCount } from "@shared/utils";
 import { db } from "./db";
 import { eq, and, desc, asc, lt, sql } from "drizzle-orm";
 
@@ -482,7 +483,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createDocument(document: InsertDocument & { authorId: string }): Promise<Document> {
-    const wordCount = document.content ? document.content.split(/\s+/).length : 0;
+    const wordCount = calculateWordCount(document.content || '');
     const [newDocument] = await db
       .insert(documents)
       .values({ ...document, wordCount })
@@ -491,7 +492,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateDocument(id: string, updates: Partial<InsertDocument>, authorId: string): Promise<Document> {
-    const wordCount = updates.content ? updates.content.split(/\s+/).length : undefined;
+    const wordCount = updates.content ? calculateWordCount(updates.content) : undefined;
     
     // Save version history
     if (updates.content) {

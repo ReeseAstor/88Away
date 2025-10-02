@@ -5,10 +5,11 @@ import TextAlign from '@tiptap/extension-text-align';
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import * as Y from 'yjs';
 import * as awarenessProtocol from 'y-protocols/awareness';
 import { YjsCollaboration } from './yjs-collaboration-extension';
+import { calculateWordCount } from '@shared/utils';
 import { 
   Bold, 
   Italic, 
@@ -75,6 +76,9 @@ export default function RichTextEditor({
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Word count state
+  const [wordCount, setWordCount] = useState(0);
 
   // Configure extensions based on collaborative mode
   const extensions = useMemo(() => {
@@ -116,8 +120,14 @@ export default function RichTextEditor({
     content: isCollaborative ? undefined : content, // Don't set initial content in collaborative mode
     editable: !readOnly && userRole !== 'reader',
     onUpdate: ({ editor }) => {
+      const htmlContent = editor.getHTML();
+      
       // IMMEDIATELY save data - no debouncing for data persistence
-      onChange(editor.getHTML());
+      onChange(htmlContent);
+      
+      // Calculate and update word count immediately
+      const newWordCount = calculateWordCount(htmlContent);
+      setWordCount(newWordCount);
       
       // Set typing status immediately (UI feedback)
       setSaveStatus('typing');
@@ -167,6 +177,15 @@ export default function RichTextEditor({
       editor.commands.setContent(content);
     }
   }, [content, editor, isCollaborative]);
+  
+  // Initialize word count when editor or content loads
+  useEffect(() => {
+    if (editor) {
+      const htmlContent = editor.getHTML();
+      const initialWordCount = calculateWordCount(htmlContent);
+      setWordCount(initialWordCount);
+    }
+  }, [editor]);
 
   if (!editor) {
     return null;
@@ -432,29 +451,37 @@ export default function RichTextEditor({
           </Button>
         </div>
         
-        {/* Autosave Indicator */}
-        {!isCollaborative && (
-          <div className="flex items-center space-x-1.5 text-xs text-muted-foreground" data-testid="autosave-indicator">
-            {saveStatus === 'typing' && (
-              <>
-                <Loader2 className="h-3 w-3 animate-spin" />
-                <span>Typing...</span>
-              </>
-            )}
-            {saveStatus === 'saving' && (
-              <>
-                <Loader2 className="h-3 w-3 animate-spin" />
-                <span>Saving...</span>
-              </>
-            )}
-            {saveStatus === 'saved' && lastSaved && (
-              <>
-                <Check className="h-3 w-3 text-green-500" />
-                <span>Saved {lastSaved.toLocaleTimeString()}</span>
-              </>
-            )}
+        {/* Autosave Indicator and Word Count */}
+        <div className="flex items-center space-x-3">
+          {/* Word Count */}
+          <div className="text-xs text-muted-foreground" data-testid="text-word-count">
+            {wordCount.toLocaleString()} {wordCount === 1 ? 'word' : 'words'}
           </div>
-        )}
+          
+          {/* Autosave Indicator */}
+          {!isCollaborative && (
+            <div className="flex items-center space-x-1.5 text-xs text-muted-foreground" data-testid="autosave-indicator">
+              {saveStatus === 'typing' && (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <span>Typing...</span>
+                </>
+              )}
+              {saveStatus === 'saving' && (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <span>Saving...</span>
+                </>
+              )}
+              {saveStatus === 'saved' && lastSaved && (
+                <>
+                  <Check className="h-3 w-3 text-green-500" />
+                  <span>Saved {lastSaved.toLocaleTimeString()}</span>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
       
       {/* Editor Content with Live Cursors Overlay */}

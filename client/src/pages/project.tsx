@@ -501,10 +501,15 @@ function ProjectContent() {
           {project.targetWordCount && (
             <div className="mt-4">
               <div className="flex items-center justify-between text-sm text-muted-foreground mb-1">
-                <span>Progress</span>
+                <span>
+                  <span data-testid="text-current-word-count">{(project.currentWordCount || 0).toLocaleString()}</span>
+                  {' / '}
+                  <span data-testid="text-target-word-count">{project.targetWordCount.toLocaleString()}</span>
+                  {' words'}
+                </span>
                 <span>{progress}%</span>
               </div>
-              <Progress value={progress} className="h-2" />
+              <Progress value={progress} className="h-2" data-testid="progress-word-count" />
             </div>
           )}
         </header>
@@ -642,7 +647,7 @@ function ProjectContent() {
                               <div className="flex items-center justify-between">
                                 <div>
                                   <h4 className="font-medium">{doc.title}</h4>
-                                  <p className="text-sm text-muted-foreground">
+                                  <p className="text-sm text-muted-foreground" data-testid={`text-document-word-count-${doc.id}`}>
                                     {doc.wordCount || 0} words
                                   </p>
                                 </div>
