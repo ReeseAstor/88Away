@@ -23,7 +23,7 @@ export default function ExportMenu({ projectId, projectTitle, userPlan = "starte
 
   const handleExport = async (format: string) => {
     // Check if user has access to advanced formats
-    const advancedFormats = ["pdf", "epub"];
+    const advancedFormats = ["pdf", "epub", "docx"];
     const isProfessionalFeature = advancedFormats.includes(format);
     const hasAccess = userPlan === "professional" || userPlan === "enterprise" || userPlan === "pro";
 
@@ -84,6 +84,13 @@ export default function ExportMenu({ projectId, projectTitle, userPlan = "starte
       format: "pdf",
       label: "PDF Document",
       description: "Professional print format",
+      icon: <FileText className="h-4 w-4" />,
+      isPremium: true,
+    },
+    {
+      format: "docx",
+      label: "Word Document",
+      description: "Microsoft Word format",
       icon: <FileText className="h-4 w-4" />,
       isPremium: true,
     },

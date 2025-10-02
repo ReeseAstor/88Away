@@ -2001,7 +2001,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Check premium format access for subscription plans
-      const premiumFormats = ['pdf', 'epub'];
+      const premiumFormats = ['pdf', 'epub', 'docx'];
       if (premiumFormats.includes(format.toLowerCase())) {
         const user = await storage.getUser(userId);
         const userPlan = user?.subscriptionPlan || 'starter';
@@ -2051,6 +2051,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           res.setHeader('Content-Type', 'application/epub+zip');
           res.setHeader('Content-Disposition', `attachment; filename="${filename}_export.epub"`);
           res.send(epubBuffer);
+          break;
+
+        case 'docx':
+          // DOCX format - requires Professional plan or above
+          const { ExportGenerator: DocxGenerator } = await import('./export-utils');
+          const docxBuffer = await DocxGenerator.generateDOCX(exportData);
+          res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+          res.setHeader('Content-Disposition', `attachment; filename="${filename}_export.docx"`);
+          res.send(docxBuffer);
           break;
 
         case 'html':
