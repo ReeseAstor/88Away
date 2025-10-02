@@ -86,10 +86,48 @@ app.use((req, res, next) => {
         const url = parse(fullUrl, true);
         const documentId = url.query.documentId as string;
         const projectId = url.query.projectId as string;
-        const sessionId = url.query.sessionId as string;
         
-        if (!documentId || !projectId || !sessionId) {
+        if (!documentId || !projectId) {
           ws.send(JSON.stringify({ type: 'error', message: 'Missing required parameters' }));
+          ws.close();
+          return;
+        }
+        
+        // Parse cookies from request headers
+        const cookieHeader = req.headers.cookie;
+        if (!cookieHeader) {
+          ws.send(JSON.stringify({ type: 'error', message: 'No session cookie found' }));
+          ws.close();
+          return;
+        }
+        
+        // Parse cookie header to get session ID
+        const cookies: Record<string, string> = {};
+        cookieHeader.split(';').forEach(cookie => {
+          const [name, ...rest] = cookie.trim().split('=');
+          cookies[name] = rest.join('=');
+        });
+        
+        const sessionCookie = cookies['connect.sid'];
+        if (!sessionCookie) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Session cookie not found' }));
+          ws.close();
+          return;
+        }
+        
+        // URL-decode the cookie and extract session ID from signed cookie (format: s:sessionId.signature)
+        let sessionId: string;
+        try {
+          const decodedCookie = decodeURIComponent(sessionCookie);
+          if (decodedCookie.startsWith('s:')) {
+            // Signed cookie - remove 's:' prefix and keep the full signature intact
+            sessionId = decodedCookie.slice(2);
+          } else {
+            // Unsigned cookie (shouldn't happen with express-session default config)
+            sessionId = decodedCookie;
+          }
+        } catch (error) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Failed to decode session cookie' }));
           ws.close();
           return;
         }
