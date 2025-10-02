@@ -314,8 +314,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Insufficient permissions" });
       }
 
+      // Normalize tags if provided as string
+      const normalizedBody = { ...req.body };
+      if (normalizedBody.tags && typeof normalizedBody.tags === 'string') {
+        normalizedBody.tags = normalizedBody.tags.split(',').map((tag: string) => tag.trim()).filter(Boolean);
+      }
+
       const validatedData = insertWorldbuildingEntrySchema.parse({
-        ...req.body,
+        ...normalizedBody,
         projectId: req.params.projectId
       });
       
@@ -324,6 +330,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error creating worldbuilding entry:", error);
       res.status(500).json({ message: "Failed to create worldbuilding entry" });
+    }
+  });
+
+  app.put('/api/worldbuilding/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const entry = await storage.getWorldbuildingEntry(req.params.id);
+      
+      if (!entry) {
+        return res.status(404).json({ message: "Worldbuilding entry not found" });
+      }
+
+      const project = await storage.getProject(entry.projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const userRole = project.ownerId === userId ? 'owner' : await storage.getUserRole(entry.projectId, userId);
+      
+      if (!userRole || (userRole !== 'owner' && userRole !== 'editor')) {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+
+      // Normalize tags if provided as string
+      const normalizedBody = { ...req.body };
+      if (normalizedBody.tags && typeof normalizedBody.tags === 'string') {
+        normalizedBody.tags = normalizedBody.tags.split(',').map((tag: string) => tag.trim()).filter(Boolean);
+      }
+
+      // Prevent projectId changes - override with existing entry's projectId
+      const validatedData = insertWorldbuildingEntrySchema.partial().parse({
+        ...normalizedBody,
+        projectId: entry.projectId
+      });
+
+      const updated = await storage.updateWorldbuildingEntry(req.params.id, validatedData);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating worldbuilding entry:", error);
+      res.status(500).json({ message: "Failed to update worldbuilding entry" });
+    }
+  });
+
+  app.delete('/api/worldbuilding/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const entry = await storage.getWorldbuildingEntry(req.params.id);
+      
+      if (!entry) {
+        return res.status(404).json({ message: "Worldbuilding entry not found" });
+      }
+
+      const project = await storage.getProject(entry.projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const userRole = project.ownerId === userId ? 'owner' : await storage.getUserRole(entry.projectId, userId);
+      
+      if (!userRole || (userRole !== 'owner' && userRole !== 'editor')) {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+
+      await storage.deleteWorldbuildingEntry(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting worldbuilding entry:", error);
+      res.status(500).json({ message: "Failed to delete worldbuilding entry" });
     }
   });
 
