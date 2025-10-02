@@ -2,6 +2,20 @@ import htmlPdf from 'html-pdf-node';
 import archiver from 'archiver';
 import { Readable } from 'stream';
 import { ProjectWithCollaborators } from '@shared/schema';
+import * as cheerio from 'cheerio';
+import type { Element, AnyNode } from 'domhandler';
+import { 
+  Document, 
+  Packer, 
+  Paragraph, 
+  TextRun, 
+  HeadingLevel, 
+  AlignmentType,
+  UnderlineType,
+  NumberFormat,
+  convertInchesToTwip,
+  LevelFormat
+} from 'docx';
 
 interface ExportData {
   project: {
@@ -480,5 +494,650 @@ h3 {
       
       archive.finalize();
     });
+  }
+
+  static async generateDOCX(data: ExportData): Promise<Buffer> {
+    const { project, characters, worldbuilding, timeline, documents } = data;
+
+    const parseHTMLToTextRuns = (html: string): TextRun[] => {
+      if (!html) return [];
+      
+      const textRuns: TextRun[] = [];
+      const tempDiv = html;
+      
+      const regex = /<(\/?)(strong|em|u|s|code|p|br|h[1-6])>|([^<]+)/gi;
+      let match;
+      const stack: string[] = [];
+      let currentText = '';
+      
+      const createRun = (text: string, bold = false, italic = false, underline = false, strike = false, code = false) => {
+        if (!text) return null;
+        return new TextRun({
+          text: text,
+          bold: bold,
+          italics: italic,
+          underline: underline ? { type: UnderlineType.SINGLE } : undefined,
+          strike: strike,
+          font: code ? 'Courier New' : undefined,
+          size: code ? 20 : undefined,
+        });
+      };
+      
+      const flushText = () => {
+        if (currentText) {
+          const bold = stack.includes('strong');
+          const italic = stack.includes('em');
+          const underline = stack.includes('u');
+          const strike = stack.includes('s');
+          const code = stack.includes('code');
+          const run = createRun(currentText, bold, italic, underline, strike, code);
+          if (run) textRuns.push(run);
+          currentText = '';
+        }
+      };
+      
+      while ((match = regex.exec(tempDiv)) !== null) {
+        const [full, isClosing, tag, textContent] = match;
+        
+        if (textContent) {
+          currentText += textContent;
+        } else if (tag) {
+          if (tag === 'br') {
+            flushText();
+            textRuns.push(new TextRun({ text: '', break: 1 }));
+          } else if (tag === 'p' && !isClosing) {
+            flushText();
+          } else if (tag === 'p' && isClosing) {
+            flushText();
+          } else if (!isClosing) {
+            flushText();
+            stack.push(tag);
+          } else {
+            flushText();
+            const lastTag = stack.pop();
+          }
+        }
+      }
+      
+      flushText();
+      
+      if (textRuns.length === 0 && html) {
+        const cleanText = html.replace(/<[^>]*>/g, '');
+        if (cleanText) {
+          textRuns.push(new TextRun({ text: cleanText }));
+        }
+      }
+      
+      return textRuns;
+    };
+
+    const parseHTMLToParagraphs = (html: string): Paragraph[] => {
+      if (!html) return [];
+      
+      const paragraphs: Paragraph[] = [];
+      const $ = cheerio.load(html, { xmlMode: false });
+      
+      const processInlineContent = (element: cheerio.Cheerio<AnyNode>): TextRun[] => {
+        const textRuns: TextRun[] = [];
+        
+        const processNode = (node: cheerio.Cheerio<AnyNode>, formatting: any = {}): void => {
+          node.contents().each((_, child) => {
+            if (child.type === 'text') {
+              const text = $(child).text();
+              if (text) {
+                textRuns.push(new TextRun({
+                  text: text,
+                  ...formatting,
+                }));
+              }
+            } else if (child.type === 'tag') {
+              const tagName = (child as Element).name;
+              const newFormatting = { ...formatting };
+              
+              if (tagName === 'strong' || tagName === 'b') {
+                newFormatting.bold = true;
+              } else if (tagName === 'em' || tagName === 'i') {
+                newFormatting.italics = true;
+              } else if (tagName === 'u') {
+                newFormatting.underline = { type: UnderlineType.SINGLE };
+              } else if (tagName === 's' || tagName === 'strike') {
+                newFormatting.strike = true;
+              } else if (tagName === 'code') {
+                newFormatting.font = 'Courier New';
+                newFormatting.size = 20;
+              } else if (tagName === 'br') {
+                textRuns.push(new TextRun({ text: '', break: 1 }));
+                return;
+              }
+              
+              processNode($(child), newFormatting);
+            }
+          });
+        };
+        
+        processNode(element);
+        return textRuns;
+      };
+      
+      const processBlockElement = (element: Element, level: number = 0, listType: 'bullet' | 'ordered' | null = null): void => {
+        const tagName = element.name;
+        const $element = $(element);
+        
+        if (tagName === 'p') {
+          const textRuns = processInlineContent($element);
+          if (textRuns.length > 0) {
+            paragraphs.push(new Paragraph({
+              children: textRuns,
+              spacing: { after: 200 },
+            }));
+          }
+        } else if (tagName === 'h1' || tagName === 'h2' || tagName === 'h3') {
+          const textRuns = processInlineContent($element);
+          const headingLevel = tagName === 'h1' ? HeadingLevel.HEADING_1 :
+                              tagName === 'h2' ? HeadingLevel.HEADING_2 :
+                              HeadingLevel.HEADING_3;
+          if (textRuns.length > 0) {
+            paragraphs.push(new Paragraph({
+              children: textRuns,
+              heading: headingLevel,
+              spacing: { after: 200 },
+            }));
+          }
+        } else if (tagName === 'ul' || tagName === 'ol') {
+          const currentListType = tagName === 'ul' ? 'bullet' : 'ordered';
+          $element.children('li').each((_, child) => {
+            processBlockElement(child as Element, level, currentListType);
+          });
+        } else if (tagName === 'li') {
+          const textRuns = processInlineContent($element.clone().children('ul, ol').remove().end());
+          if (textRuns.length > 0) {
+            const paragraphOptions: any = {
+              children: textRuns,
+              spacing: { after: 100 },
+              indent: { left: convertInchesToTwip(0.5 * (level + 1)) },
+            };
+            
+            if (listType === 'bullet') {
+              paragraphOptions.bullet = { level: level };
+            } else if (listType === 'ordered') {
+              paragraphOptions.numbering = {
+                reference: 'default-numbering',
+                level: level,
+              };
+            }
+            
+            paragraphs.push(new Paragraph(paragraphOptions));
+          }
+          
+          $element.children('ul, ol').each((_, child) => {
+            processBlockElement(child as Element, level + 1, null);
+          });
+        } else if (tagName === 'blockquote') {
+          $element.children().each((_, child) => {
+            if (child.type === 'tag') {
+              const childElement = child as Element;
+              if (childElement.name === 'p') {
+                const textRuns = processInlineContent($(child));
+                if (textRuns.length > 0) {
+                  paragraphs.push(new Paragraph({
+                    children: textRuns,
+                    indent: { left: convertInchesToTwip(0.5) },
+                    spacing: { after: 200 },
+                    border: {
+                      left: {
+                        color: '999999',
+                        space: 1,
+                        style: 'single',
+                        size: 6,
+                      },
+                    },
+                  }));
+                }
+              } else {
+                processBlockElement(childElement, level, listType);
+              }
+            }
+          });
+          
+          if ($element.children().length === 0) {
+            const textRuns = processInlineContent($element);
+            if (textRuns.length > 0) {
+              paragraphs.push(new Paragraph({
+                children: textRuns,
+                indent: { left: convertInchesToTwip(0.5) },
+                spacing: { after: 200 },
+                border: {
+                  left: {
+                    color: '999999',
+                    space: 1,
+                    style: 'single',
+                    size: 6,
+                  },
+                },
+              }));
+            }
+          }
+        } else if (tagName === 'pre') {
+          const codeElement = $element.find('code');
+          const code = (codeElement.length > 0 ? codeElement.text() : $element.text()).trim();
+          if (code) {
+            const lines = code.split('\n');
+            lines.forEach((line, index) => {
+              paragraphs.push(new Paragraph({
+                children: [new TextRun({
+                  text: line || ' ',
+                  font: 'Courier New',
+                  size: 20,
+                })],
+                spacing: { after: index === lines.length - 1 ? 200 : 0 },
+                shading: {
+                  type: 'clear',
+                  color: 'auto',
+                  fill: 'F5F5F5',
+                },
+              }));
+            });
+          }
+        } else if (tagName === 'div' || tagName === 'section' || tagName === 'article') {
+          $element.children().each((_, child) => {
+            if (child.type === 'tag') {
+              processBlockElement(child as Element, level, listType);
+            }
+          });
+        } else if (tagName === 'html' || tagName === 'body') {
+          $element.children().each((_, child) => {
+            if (child.type === 'tag') {
+              processBlockElement(child as Element, level, listType);
+            }
+          });
+        }
+      };
+      
+      if ($('body').length) {
+        $('body').children().each((_, node) => {
+          if (node.type === 'tag') {
+            processBlockElement(node as Element, 0, null);
+          }
+        });
+      } else {
+        $.root().children().each((_, node) => {
+          if (node.type === 'tag') {
+            processBlockElement(node as Element, 0, null);
+          }
+        });
+      }
+      
+      if (paragraphs.length === 0 && html) {
+        const cleanText = $.text().trim();
+        if (cleanText) {
+          paragraphs.push(new Paragraph({
+            children: [new TextRun({ text: cleanText })],
+            spacing: { after: 200 },
+          }));
+        }
+      }
+      
+      return paragraphs;
+    };
+
+    const sections: Paragraph[] = [];
+
+    sections.push(
+      new Paragraph({
+        text: project.title,
+        heading: HeadingLevel.TITLE,
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 400 },
+      })
+    );
+
+    if (project.description || project.genre || project.currentWordCount || project.targetWordCount) {
+      sections.push(
+        new Paragraph({
+          text: 'Project Information',
+          heading: HeadingLevel.HEADING_1,
+          spacing: { before: 400, after: 200 },
+        })
+      );
+
+      if (project.description) {
+        sections.push(
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Description: ', bold: true }),
+              new TextRun({ text: project.description }),
+            ],
+            spacing: { after: 200 },
+          })
+        );
+      }
+
+      if (project.genre) {
+        sections.push(
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Genre: ', bold: true }),
+              new TextRun({ text: project.genre }),
+            ],
+            spacing: { after: 200 },
+          })
+        );
+      }
+
+      if (project.currentWordCount !== undefined && project.currentWordCount !== null) {
+        sections.push(
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Current Word Count: ', bold: true }),
+              new TextRun({ text: project.currentWordCount.toLocaleString() }),
+            ],
+            spacing: { after: 200 },
+          })
+        );
+      }
+
+      if (project.targetWordCount !== undefined && project.targetWordCount !== null) {
+        sections.push(
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Target Word Count: ', bold: true }),
+              new TextRun({ text: project.targetWordCount.toLocaleString() }),
+            ],
+            spacing: { after: 200 },
+          })
+        );
+      }
+    }
+
+    if (characters.length > 0) {
+      sections.push(
+        new Paragraph({
+          text: 'Characters',
+          heading: HeadingLevel.HEADING_1,
+          spacing: { before: 600, after: 300 },
+        })
+      );
+
+      for (const char of characters) {
+        sections.push(
+          new Paragraph({
+            text: char.name,
+            heading: HeadingLevel.HEADING_2,
+            spacing: { before: 400, after: 200 },
+          })
+        );
+
+        if (char.description) {
+          sections.push(
+            new Paragraph({
+              children: [
+                new TextRun({ text: 'Description: ', bold: true }),
+                new TextRun({ text: char.description }),
+              ],
+              spacing: { after: 200 },
+            })
+          );
+        }
+
+        if (char.background) {
+          sections.push(
+            new Paragraph({
+              children: [
+                new TextRun({ text: 'Background: ', bold: true }),
+                new TextRun({ text: char.background }),
+              ],
+              spacing: { after: 200 },
+            })
+          );
+        }
+
+        if (char.personality) {
+          sections.push(
+            new Paragraph({
+              children: [
+                new TextRun({ text: 'Personality: ', bold: true }),
+                new TextRun({ text: char.personality }),
+              ],
+              spacing: { after: 200 },
+            })
+          );
+        }
+
+        if (char.appearance) {
+          sections.push(
+            new Paragraph({
+              children: [
+                new TextRun({ text: 'Appearance: ', bold: true }),
+                new TextRun({ text: char.appearance }),
+              ],
+              spacing: { after: 200 },
+            })
+          );
+        }
+
+        if (char.notes) {
+          sections.push(
+            new Paragraph({
+              children: [
+                new TextRun({ text: 'Notes: ', bold: true }),
+                new TextRun({ text: char.notes }),
+              ],
+              spacing: { after: 200 },
+            })
+          );
+        }
+      }
+    }
+
+    if (worldbuilding.length > 0) {
+      sections.push(
+        new Paragraph({
+          text: 'World Building',
+          heading: HeadingLevel.HEADING_1,
+          spacing: { before: 600, after: 300 },
+        })
+      );
+
+      for (const entry of worldbuilding) {
+        sections.push(
+          new Paragraph({
+            text: entry.name,
+            heading: HeadingLevel.HEADING_2,
+            spacing: { before: 400, after: 200 },
+          })
+        );
+
+        if (entry.description) {
+          sections.push(
+            new Paragraph({
+              children: [
+                new TextRun({ text: 'Description: ', bold: true }),
+                new TextRun({ text: entry.description }),
+              ],
+              spacing: { after: 200 },
+            })
+          );
+        }
+
+        if (entry.category) {
+          sections.push(
+            new Paragraph({
+              children: [
+                new TextRun({ text: 'Category: ', bold: true }),
+                new TextRun({ text: entry.category }),
+              ],
+              spacing: { after: 200 },
+            })
+          );
+        }
+
+        if (entry.tags && entry.tags.length > 0) {
+          sections.push(
+            new Paragraph({
+              children: [
+                new TextRun({ text: 'Tags: ', bold: true }),
+                new TextRun({ text: entry.tags.join(', ') }),
+              ],
+              spacing: { after: 200 },
+            })
+          );
+        }
+      }
+    }
+
+    if (timeline.length > 0) {
+      sections.push(
+        new Paragraph({
+          text: 'Timeline',
+          heading: HeadingLevel.HEADING_1,
+          spacing: { before: 600, after: 300 },
+        })
+      );
+
+      for (const event of timeline) {
+        sections.push(
+          new Paragraph({
+            text: event.title,
+            heading: HeadingLevel.HEADING_2,
+            spacing: { before: 400, after: 200 },
+          })
+        );
+
+        if (event.description) {
+          sections.push(
+            new Paragraph({
+              children: [
+                new TextRun({ text: 'Description: ', bold: true }),
+                new TextRun({ text: event.description }),
+              ],
+              spacing: { after: 200 },
+            })
+          );
+        }
+
+        if (event.date) {
+          sections.push(
+            new Paragraph({
+              children: [
+                new TextRun({ text: 'Date: ', bold: true }),
+                new TextRun({ text: event.date }),
+              ],
+              spacing: { after: 200 },
+            })
+          );
+        }
+
+        if (event.category) {
+          sections.push(
+            new Paragraph({
+              children: [
+                new TextRun({ text: 'Category: ', bold: true }),
+                new TextRun({ text: event.category }),
+              ],
+              spacing: { after: 200 },
+            })
+          );
+        }
+      }
+    }
+
+    if (documents.length > 0) {
+      sections.push(
+        new Paragraph({
+          text: 'Documents',
+          heading: HeadingLevel.HEADING_1,
+          spacing: { before: 600, after: 300 },
+        })
+      );
+
+      for (const doc of documents) {
+        sections.push(
+          new Paragraph({
+            text: doc.title,
+            heading: HeadingLevel.HEADING_2,
+            spacing: { before: 400, after: 200 },
+          })
+        );
+
+        if (doc.content) {
+          const contentParagraphs = parseHTMLToParagraphs(doc.content);
+          sections.push(...contentParagraphs);
+        }
+      }
+    }
+
+    sections.push(
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: `Exported from WriteCraft Pro on ${new Date(data.exportedAt).toLocaleDateString()}`,
+            italics: true,
+          })
+        ],
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 600 },
+      })
+    );
+
+    const docx = new Document({
+      numbering: {
+        config: [
+          {
+            reference: 'default-numbering',
+            levels: [
+              {
+                level: 0,
+                format: LevelFormat.DECIMAL,
+                text: '%1.',
+                alignment: AlignmentType.LEFT,
+                style: {
+                  paragraph: {
+                    indent: { left: convertInchesToTwip(0.5), hanging: convertInchesToTwip(0.25) },
+                  },
+                },
+              },
+              {
+                level: 1,
+                format: LevelFormat.DECIMAL,
+                text: '%2.',
+                alignment: AlignmentType.LEFT,
+                style: {
+                  paragraph: {
+                    indent: { left: convertInchesToTwip(1.0), hanging: convertInchesToTwip(0.25) },
+                  },
+                },
+              },
+              {
+                level: 2,
+                format: LevelFormat.DECIMAL,
+                text: '%3.',
+                alignment: AlignmentType.LEFT,
+                style: {
+                  paragraph: {
+                    indent: { left: convertInchesToTwip(1.5), hanging: convertInchesToTwip(0.25) },
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      },
+      sections: [{
+        properties: {
+          page: {
+            margin: {
+              top: convertInchesToTwip(1),
+              right: convertInchesToTwip(1),
+              bottom: convertInchesToTwip(1),
+              left: convertInchesToTwip(1),
+            },
+          },
+        },
+        children: sections,
+      }],
+    });
+
+    const buffer = await Packer.toBuffer(docx);
+    return buffer;
   }
 }
