@@ -12,7 +12,8 @@ import {
   Mail,
   MapPin
 } from "lucide-react";
-import logo from "@/assets/88away-logo.png";
+import logo from "@/assets/88away-logo-pink.png";
+import logoWhite from "@/assets/88away-logo-white.png";
 
 export default function Landing() {
   const features = [
@@ -329,7 +330,7 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <div className="flex items-center justify-center mb-6">
-              <img src={logo} alt="88Away Logo" className="h-12 w-auto brightness-0 invert opacity-90" />
+              <img src={logoWhite} alt="88Away Logo" className="h-12 w-auto brightness-0 invert opacity-90" />
             </div>
             <div className="space-y-2 mb-4">
               <p className="text-primary-foreground/90 font-medium">88Away LLC</p>
