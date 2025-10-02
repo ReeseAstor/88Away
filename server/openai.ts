@@ -1,4 +1,6 @@
 import OpenAI from "openai";
+import type { IStorage } from "./storage";
+import type { Character, WorldbuildingEntry, TimelineEvent } from "@shared/schema";
 
 // Using GPT-4 for advanced analysis features
 let openai: OpenAI | null = null;
@@ -22,11 +24,46 @@ function getOpenAIClient(): OpenAI {
   return openai;
 }
 
+export async function fetchProjectContext(projectId: string, storage: IStorage): Promise<ProjectContext> {
+  try {
+    const [characters, worldbuilding, timeline] = await Promise.all([
+      storage.getProjectCharacters(projectId),
+      storage.getProjectWorldbuilding(projectId),
+      storage.getProjectTimeline(projectId)
+    ]);
+
+    // Limit context to prevent token overflow
+    const limitedCharacters = characters.slice(0, 10);
+    const limitedWorldbuilding = worldbuilding.slice(0, 5);
+    const limitedTimeline = timeline.slice(0, 8);
+
+    return {
+      characters: limitedCharacters,
+      worldbuilding: limitedWorldbuilding,
+      timeline: limitedTimeline
+    };
+  } catch (error) {
+    console.error("Error fetching project context:", error);
+    return {
+      characters: [],
+      worldbuilding: [],
+      timeline: []
+    };
+  }
+}
+
+export interface ProjectContext {
+  characters: Character[];
+  worldbuilding: WorldbuildingEntry[];
+  timeline: TimelineEvent[];
+}
+
 export interface AiRequest {
   intent: string;
   persona: "muse" | "editor" | "coach";
   project_id: string;
   context_refs?: string[];
+  project_context?: ProjectContext;
   params: {
     max_tokens?: number;
     deterministic?: boolean;
@@ -159,22 +196,80 @@ export function buildMusePrompt(data: {
   mood: { tension: number; intimacy: number; pacing: string };
   lastSceneSummary?: string;
   targetLength: string;
+  projectContext?: ProjectContext;
 }): string {
-  const charactersStr = data.characters.map(c => `${c.name}:${c.status}`).join(', ');
+  let prompt = `Project: ${data.projectTitle}\n\n`;
   
-  return `Project: ${data.projectTitle}; Scene intent: ${data.sceneIntent}; Setting: ${data.setting}; Characters: [${charactersStr}]; Mood: tension=${data.mood.tension}, intimacy=${data.mood.intimacy}, pacing=${data.mood.pacing}; ${data.lastSceneSummary ? `Context: last_scene_summary: "${data.lastSceneSummary}"; ` : ''}Length target: ${data.targetLength}.`;
+  // Add character context if available
+  if (data.projectContext?.characters && data.projectContext.characters.length > 0) {
+    prompt += `Characters in this project:\n`;
+    data.projectContext.characters.forEach(char => {
+      prompt += `- ${char.name}: ${char.description || 'No description'}`;
+      if (char.personality) prompt += ` | Personality: ${char.personality}`;
+      if (char.background) prompt += ` | Background: ${char.background}`;
+      prompt += '\n';
+    });
+    prompt += '\n';
+  }
+  
+  // Add worldbuilding context if available
+  if (data.projectContext?.worldbuilding && data.projectContext.worldbuilding.length > 0) {
+    prompt += `Worldbuilding:\n`;
+    data.projectContext.worldbuilding.forEach(wb => {
+      prompt += `- ${wb.type}: ${wb.title} - ${wb.description || 'No description'}\n`;
+    });
+    prompt += '\n';
+  }
+  
+  // Add timeline context if available
+  if (data.projectContext?.timeline && data.projectContext.timeline.length > 0) {
+    prompt += `Timeline Key Events:\n`;
+    data.projectContext.timeline.forEach(event => {
+      prompt += `- ${event.date || 'Unknown date'}: ${event.title} - ${event.description || 'No description'}\n`;
+    });
+    prompt += '\n';
+  }
+  
+  // Add scene-specific context
+  const charactersStr = data.characters.map(c => `${c.name}:${c.status}`).join(', ');
+  prompt += `Scene intent: ${data.sceneIntent}\n`;
+  prompt += `Setting: ${data.setting}\n`;
+  prompt += `Characters in scene: [${charactersStr}]\n`;
+  prompt += `Mood: tension=${data.mood.tension}, intimacy=${data.mood.intimacy}, pacing=${data.mood.pacing}\n`;
+  
+  if (data.lastSceneSummary) {
+    prompt += `Previous scene summary: "${data.lastSceneSummary}"\n`;
+  }
+  
+  prompt += `Length target: ${data.targetLength}`;
+  
+  return prompt;
 }
 
 export function buildEditorPrompt(data: {
   originalText: string;
   goals: { concise: boolean; preserve_voice: boolean; remove_passive: boolean };
+  projectContext?: ProjectContext;
 }): string {
+  let prompt = '';
+  
+  // Add character context for consistency checking
+  if (data.projectContext?.characters && data.projectContext.characters.length > 0) {
+    prompt += `Character reference for consistency:\n`;
+    data.projectContext.characters.forEach(char => {
+      prompt += `- ${char.name}: ${char.description || 'No description'}\n`;
+    });
+    prompt += '\n';
+  }
+  
   const goalsStr = Object.entries(data.goals)
     .filter(([_, value]) => value)
     .map(([key, _]) => key)
     .join(', ');
     
-  return `Task: Edit paragraph for clarity. Original: "${data.originalText}". Goals: ${goalsStr}.`;
+  prompt += `Task: Edit paragraph for clarity. Original: "${data.originalText}". Goals: ${goalsStr}.`;
+  
+  return prompt;
 }
 
 export function buildCoachPrompt(data: {
@@ -184,15 +279,47 @@ export function buildCoachPrompt(data: {
   tone: string;
   mustHaveBeats?: string[];
   constraints?: string;
+  projectContext?: ProjectContext;
 }): string {
-  let prompt = `Project: ${data.title}; Premise: "${data.premise}"; Target_length: ${data.targetLength}; Tone: ${data.tone};`;
+  let prompt = `Project: ${data.title}\nPremise: "${data.premise}"\n\n`;
+  
+  // Add character context
+  if (data.projectContext?.characters && data.projectContext.characters.length > 0) {
+    prompt += `Main Characters:\n`;
+    data.projectContext.characters.forEach(char => {
+      prompt += `- ${char.name}: ${char.description || 'No description'}`;
+      if (char.personality) prompt += ` | ${char.personality}`;
+      prompt += '\n';
+    });
+    prompt += '\n';
+  }
+  
+  // Add worldbuilding context
+  if (data.projectContext?.worldbuilding && data.projectContext.worldbuilding.length > 0) {
+    prompt += `World Elements:\n`;
+    data.projectContext.worldbuilding.forEach(wb => {
+      prompt += `- ${wb.type}: ${wb.title}\n`;
+    });
+    prompt += '\n';
+  }
+  
+  // Add timeline context for structure
+  if (data.projectContext?.timeline && data.projectContext.timeline.length > 0) {
+    prompt += `Key Timeline Events:\n`;
+    data.projectContext.timeline.forEach(event => {
+      prompt += `- ${event.title}\n`;
+    });
+    prompt += '\n';
+  }
+  
+  prompt += `Target length: ${data.targetLength}\nTone: ${data.tone}\n`;
   
   if (data.mustHaveBeats && data.mustHaveBeats.length > 0) {
-    prompt += ` Must-have beats: [${data.mustHaveBeats.join(', ')}];`;
+    prompt += `Must-have beats: [${data.mustHaveBeats.join(', ')}]\n`;
   }
   
   if (data.constraints) {
-    prompt += ` Constraints: ${data.constraints}.`;
+    prompt += `Constraints: ${data.constraints}`;
   }
   
   return prompt;

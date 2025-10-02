@@ -11,6 +11,7 @@ import {
   buildMusePrompt, 
   buildEditorPrompt, 
   buildCoachPrompt,
+  fetchProjectContext,
   analyzeWritingStyle,
   analyzePlotConsistency,
   analyzeCharacterDevelopment,
@@ -1409,7 +1410,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const { intent, persona, project_id, context_refs, params, userPrompt } = req.body;
 
-      // Validate project access
+      // Validate project access and fetch project context
+      let projectContext;
       if (project_id) {
         const project = await storage.getProject(project_id);
         if (!project) {
@@ -1422,6 +1424,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!hasAccess) {
           return res.status(403).json({ message: "Access denied" });
         }
+
+        // Fetch project context (characters, worldbuilding, timeline)
+        projectContext = await fetchProjectContext(project_id, storage);
       }
 
       const aiRequest: AiRequest = {
@@ -1429,6 +1434,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         persona,
         project_id,
         context_refs,
+        project_context: projectContext,
         params
       };
 
@@ -1455,12 +1461,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/ai/muse', isAuthenticated, async (req: any, res) => {
     try {
       const { projectId, sceneData } = req.body;
-      const userPrompt = buildMusePrompt(sceneData);
+      
+      // Fetch project context
+      const projectContext = projectId ? await fetchProjectContext(projectId, storage) : undefined;
+      
+      // Pass project context to the prompt builder
+      const userPrompt = buildMusePrompt({
+        ...sceneData,
+        projectContext
+      });
       
       const aiRequest: AiRequest = {
         intent: "draft_scene",
         persona: "muse",
         project_id: projectId,
+        project_context: projectContext,
         params: {
           max_tokens: 800
         }
@@ -1477,12 +1492,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/ai/editor', isAuthenticated, async (req: any, res) => {
     try {
       const { projectId, editData } = req.body;
-      const userPrompt = buildEditorPrompt(editData);
+      
+      // Fetch project context
+      const projectContext = projectId ? await fetchProjectContext(projectId, storage) : undefined;
+      
+      // Pass project context to the prompt builder
+      const userPrompt = buildEditorPrompt({
+        ...editData,
+        projectContext
+      });
       
       const aiRequest: AiRequest = {
         intent: "edit_paragraph",
         persona: "editor",
         project_id: projectId,
+        project_context: projectContext,
         params: {
           max_tokens: 400
         }
@@ -1499,12 +1523,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/ai/coach', isAuthenticated, async (req: any, res) => {
     try {
       const { projectId, outlineData } = req.body;
-      const userPrompt = buildCoachPrompt(outlineData);
+      
+      // Fetch project context
+      const projectContext = projectId ? await fetchProjectContext(projectId, storage) : undefined;
+      
+      // Pass project context to the prompt builder
+      const userPrompt = buildCoachPrompt({
+        ...outlineData,
+        projectContext
+      });
       
       const aiRequest: AiRequest = {
         intent: "generate_outline",
         persona: "coach",
         project_id: projectId,
+        project_context: projectContext,
         params: {
           max_tokens: 600
         }
