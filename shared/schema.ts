@@ -267,6 +267,23 @@ export const collaborationPresence = pgTable("collaboration_presence", {
   lastSeen: timestamp("last_seen").defaultNow(),
 });
 
+// Notifications for collaborative alerts
+export const notifications = pgTable("notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  type: varchar("type").notNull(),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  projectId: varchar("project_id").references(() => projects.id, { onDelete: 'cascade' }),
+  resourceId: varchar("resource_id"),
+  resourceType: varchar("resource_type"),
+  actorId: varchar("actor_id").references(() => users.id, { onDelete: 'cascade' }),
+  isRead: boolean("is_read").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_notifications_user_created").on(table.userId, table.createdAt),
+]);
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   ownedProjects: many(projects),
@@ -280,6 +297,8 @@ export const usersRelations = relations(users, ({ many }) => ({
   activityLogs: many(activityLogs),
   collaborationPresence: many(collaborationPresence),
   branchMergeEvents: many(branchMergeEvents),
+  notifications: many(notifications),
+  triggeredNotifications: many(notifications),
 }));
 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
@@ -296,6 +315,7 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   writingSessions: many(writingSessions),
   activityLogs: many(activityLogs),
   collaborationPresence: many(collaborationPresence),
+  notifications: many(notifications),
 }));
 
 export const projectCollaboratorsRelations = relations(projectCollaborators, ({ one }) => ({
@@ -484,6 +504,21 @@ export const collaborationPresenceRelations = relations(collaborationPresence, (
   }),
 }));
 
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  user: one(users, {
+    fields: [notifications.userId],
+    references: [users.id],
+  }),
+  project: one(projects, {
+    fields: [notifications.projectId],
+    references: [projects.id],
+  }),
+  actor: one(users, {
+    fields: [notifications.actorId],
+    references: [users.id],
+  }),
+}));
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).pick({
   email: true,
@@ -552,6 +587,11 @@ export const insertCollaborationPresenceSchema = createInsertSchema(collaboratio
   lastSeen: true,
 });
 
+export const insertNotificationSchema = createInsertSchema(notifications).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Branching insert schemas
 export const insertDocumentBranchSchema = createInsertSchema(documentBranches).omit({
   id: true,
@@ -605,6 +645,10 @@ export type InsertDocumentComment = z.infer<typeof insertDocumentCommentSchema>;
 export type DocumentComment = typeof documentComments.$inferSelect;
 export type InsertCollaborationPresence = z.infer<typeof insertCollaborationPresenceSchema>;
 export type CollaborationPresence = typeof collaborationPresence.$inferSelect;
+
+// Notification types
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type Notification = typeof notifications.$inferSelect;
 
 // Branching types
 export type DocumentBranch = typeof documentBranches.$inferSelect;
