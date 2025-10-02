@@ -59,6 +59,20 @@ interface ProjectAnalytics {
     daily: Array<{ date: string; words: number; sessions: number }>;
     weekly: Array<{ week: string; words: number; sessions: number }>;
     monthly: Array<{ month: string; words: number; sessions: number }>;
+    streak: {
+      currentStreak: number;
+      longestStreak: number;
+      lastActiveDate: string;
+    };
+    weeklyStats: {
+      totalWords: number;
+      averageDaily: number;
+      mostProductiveDay: string;
+    };
+    monthlyStats: {
+      totalWords: number;
+      averageDaily: number;
+    };
   };
   aiUsage: {
     totalGenerations: number;
@@ -304,6 +318,131 @@ export default function AnalyticsPage() {
           </TabsList>
 
           <TabsContent value="progress" className="space-y-6">
+            {/* Writing Streaks */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <Card className="bg-gradient-to-br from-orange-50 to-red-50 dark:from-orange-950/20 dark:to-red-950/20 backdrop-blur border-orange-200 dark:border-orange-800">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Current Streak
+                  </CardTitle>
+                  <div className="text-2xl">🔥</div>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold text-orange-600 dark:text-orange-400" data-testid="text-current-streak">
+                    {analytics.writingProgress.streak.currentStreak} days
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                    Keep the momentum going!
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950/20 dark:to-pink-950/20 backdrop-blur border-purple-200 dark:border-purple-800">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Longest Streak
+                  </CardTitle>
+                  <div className="text-2xl">🏆</div>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold text-purple-600 dark:text-purple-400" data-testid="text-longest-streak">
+                    {analytics.writingProgress.streak.longestStreak} days
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                    Personal best record
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-950/20 dark:to-cyan-950/20 backdrop-blur border-blue-200 dark:border-blue-800">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Last Active
+                  </CardTitle>
+                  <Calendar className="h-4 w-4 text-blue-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-xl font-bold text-blue-600 dark:text-blue-400" data-testid="text-last-active">
+                    {analytics.writingProgress.streak.lastActiveDate || 'N/A'}
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                    Most recent writing session
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Weekly & Monthly KPI Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur border-green-200 dark:border-green-800">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                    Words This Week
+                  </CardTitle>
+                  <PenTool className="h-4 w-4 text-green-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-slate-900 dark:text-slate-100" data-testid="text-weekly-words">
+                    {analytics.writingProgress.weeklyStats.totalWords.toLocaleString()}
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400">
+                    Last 7 days
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur border-blue-200 dark:border-blue-800">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                    Daily Average (Week)
+                  </CardTitle>
+                  <TrendingUp className="h-4 w-4 text-blue-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-slate-900 dark:text-slate-100" data-testid="text-weekly-average">
+                    {analytics.writingProgress.weeklyStats.averageDaily.toLocaleString()}
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400">
+                    Words per day
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur border-purple-200 dark:border-purple-800">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                    Most Productive Day
+                  </CardTitle>
+                  <Zap className="h-4 w-4 text-purple-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-xl font-bold text-slate-900 dark:text-slate-100" data-testid="text-productive-day">
+                    {analytics.writingProgress.weeklyStats.mostProductiveDay}
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400">
+                    This week
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur border-orange-200 dark:border-orange-800">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                    Monthly Average
+                  </CardTitle>
+                  <Activity className="h-4 w-4 text-orange-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-slate-900 dark:text-slate-100" data-testid="text-monthly-average">
+                    {analytics.writingProgress.monthlyStats.averageDaily.toLocaleString()}
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400">
+                    Words per day (30 days)
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
             {/* Writing Progress Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur">
