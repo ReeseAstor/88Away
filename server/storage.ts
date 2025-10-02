@@ -14,6 +14,7 @@ import {
   documentCollaborationStates,
   documentComments,
   collaborationPresence,
+  notifications,
   type User,
   type UpsertUser,
   type Project,
@@ -43,6 +44,8 @@ import {
   type InsertDocumentComment,
   type CollaborationPresence,
   type InsertCollaborationPresence,
+  type Notification,
+  type InsertNotification,
   type OnboardingProgress,
 } from "@shared/schema";
 import { calculateWordCount } from "@shared/utils";
@@ -159,6 +162,14 @@ export interface IStorage {
 
   // Template operations
   applyProjectTemplate(projectId: string, template: string, authorId: string): Promise<void>;
+
+  // Notifications
+  getNotifications(userId: string, limit?: number): Promise<Notification[]>;
+  getUnreadCount(userId: string): Promise<number>;
+  markNotificationAsRead(id: string, userId: string): Promise<void>;
+  markAllNotificationsAsRead(userId: string): Promise<void>;
+  createNotification(notification: InsertNotification): Promise<Notification>;
+  deleteNotification(id: string, userId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1264,6 +1275,81 @@ export class DatabaseStorage implements IStorage {
         projectId,
       });
     }
+  }
+
+  async getNotifications(userId: string, limit: number = 50): Promise<Notification[]> {
+    const notifs = await db
+      .select({
+        id: notifications.id,
+        userId: notifications.userId,
+        type: notifications.type,
+        title: notifications.title,
+        message: notifications.message,
+        projectId: notifications.projectId,
+        resourceId: notifications.resourceId,
+        resourceType: notifications.resourceType,
+        actorId: notifications.actorId,
+        isRead: notifications.isRead,
+        createdAt: notifications.createdAt,
+      })
+      .from(notifications)
+      .where(eq(notifications.userId, userId))
+      .orderBy(desc(notifications.createdAt))
+      .limit(limit);
+
+    return notifs;
+  }
+
+  async getUnreadCount(userId: string): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.userId, userId),
+          eq(notifications.isRead, false)
+        )
+      );
+
+    return result[0]?.count ?? 0;
+  }
+
+  async markNotificationAsRead(id: string, userId: string): Promise<void> {
+    await db
+      .update(notifications)
+      .set({ isRead: true })
+      .where(
+        and(
+          eq(notifications.id, id),
+          eq(notifications.userId, userId)
+        )
+      );
+  }
+
+  async markAllNotificationsAsRead(userId: string): Promise<void> {
+    await db
+      .update(notifications)
+      .set({ isRead: true })
+      .where(eq(notifications.userId, userId));
+  }
+
+  async createNotification(notification: InsertNotification): Promise<Notification> {
+    const [newNotification] = await db
+      .insert(notifications)
+      .values(notification)
+      .returning();
+    return newNotification;
+  }
+
+  async deleteNotification(id: string, userId: string): Promise<void> {
+    await db
+      .delete(notifications)
+      .where(
+        and(
+          eq(notifications.id, id),
+          eq(notifications.userId, userId)
+        )
+      );
   }
 }
 
