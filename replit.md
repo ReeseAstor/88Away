@@ -66,11 +66,11 @@ Preferred communication style: Simple, everyday language.
 - ✅ Task 7: AI usage analytics (token tracking, subscription-based limits, enforcement, enhanced visualizations)
 - ✅ Task 8: Export system (JSON, HTML, PDF, ePub, Word/DOCX with proper TipTap formatting preservation)
 - ✅ Task 9: Onboarding flow (welcome modal, 5-step checklist with auto-tracking, database-backed progress)
-- 📋 Task 10: Writing progress dashboard
-- 📋 Task 11: Character database UX improvements
-- 📋 Task 12: Timeline visualization enhancements
+- ✅ Task 10: Writing progress dashboard (streak tracking, weekly/monthly statistics, productive day analysis)
+- ✅ Task 11: Character database UX improvements (filtering, sorting, grid/list toggle, enhanced cards)
+- ✅ Task 12: Timeline visualization enhancements (drag-and-drop event reordering, cross-year dragging)
 
-**Phase 1 Progress**: 9/12 tasks complete (75%)
+**Phase 1 Progress**: 12/12 tasks complete (100%) - COMPLETE
 
 # External Dependencies
 
@@ -118,3 +118,32 @@ The application provides a multi-stage onboarding flow for new users:
 - **Auto-Completion**: When all 5 steps complete, system automatically marks `tourCompleted: true` and updates `hasCompletedOnboarding: true`
 - **Step Handlers**: Distributed across dashboard, characters page, analytics page, and export menu
 - **Cache Invalidation**: Mutations invalidate both `/api/user/onboarding` and `/api/auth/user` to keep UI in sync
+
+## Writing Progress Dashboard
+The dashboard provides comprehensive writing analytics with streak tracking and productivity insights:
+- **Streak Calculation**: Analyzes document version history to identify consecutive days with >0 word delta
+- **Three Streak Types**: Current streak (active), longest streak (all-time record), last active (most recent writing day)
+- **Statistics**: Weekly and monthly word counts with percentage change indicators
+- **Productive Day Analysis**: Identifies the weekday with highest average word count across all documents
+- **Data Sources**: Combines document updates, version history, and AI usage for holistic progress view
+- **Visualization**: Enhanced analytics charts showing AI token usage over time with daily/weekly/monthly breakdowns
+
+## Character Database
+The character database features advanced organization and filtering capabilities:
+- **Metadata**: Role (protagonist/antagonist/supporting/minor/other), importance (1-5 star scale), custom tags array
+- **Filtering**: Client-side filtering by role dropdown and text search across name/description/notes/tags
+- **Sorting**: Multiple sort options (alphabetical by name, creation date, last updated) with ascending/descending toggle
+- **View Modes**: Grid view (cards with badges/stars/chips) and list view (compact rows) with localStorage persistence
+- **Enhanced Cards**: Visual badges for roles, star rating display for importance, tag chips with color coding
+- **User Preference**: View mode selection persists across sessions for better UX
+
+## Timeline Visualization
+The timeline provides drag-and-drop event management with proper persistence and security:
+- **Drag-and-Drop**: @dnd-kit integration with mouse, touch, and keyboard sensors for accessibility
+- **orderIndex Field**: Integer field in timelineEvents table providing deterministic event ordering
+- **Reorder Algorithm**: Array-based approach using splice to remove/insert, then resequence all events with contiguous indices
+- **Cross-Year Dragging**: Automatically updates event date when dragged to different year/era
+- **Security**: Project ownership verification prevents cross-project event manipulation
+- **Atomicity**: Database transactions ensure data consistency during multi-event resequencing
+- **Optimistic UI**: Immediate visual feedback with automatic rollback on error
+- **Visual Feedback**: Drag handles with GripVertical icon, drag overlay, and drop zone indicators
