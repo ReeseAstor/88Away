@@ -65,10 +65,12 @@ Preferred communication style: Simple, everyday language.
 - ✅ Task 6: Refined AI system prompts (enhanced with context usage, structure, safety)
 - ✅ Task 7: AI usage analytics (token tracking, subscription-based limits, enforcement, enhanced visualizations)
 - ✅ Task 8: Export system (JSON, HTML, PDF, ePub, Word/DOCX with proper TipTap formatting preservation)
-- 📋 Task 9: Onboarding flow for new users
+- ✅ Task 9: Onboarding flow (welcome modal, 5-step checklist with auto-tracking, database-backed progress)
 - 📋 Task 10: Writing progress dashboard
 - 📋 Task 11: Character database UX improvements
 - 📋 Task 12: Timeline visualization enhancements
+
+**Phase 1 Progress**: 9/12 tasks complete (75%)
 
 # External Dependencies
 
@@ -101,3 +103,18 @@ The application uses standard word counting methodology (follows Microsoft Word/
   - "Hello&nbsp;world" = 2 words (non-breaking space decoded)
 - **Consistency**: Client (editor display) and server (storage) use identical logic
 - **Aggregation**: Project word count = sum of all document word counts (updated on each document save)
+
+## Onboarding System
+The application provides a multi-stage onboarding flow for new users:
+- **Database-Backed**: Progress stored in `users.onboardingProgress` JSONB field for multi-device support
+- **Welcome Modal**: 4-slide carousel introducing platform features (skip/complete → `welcomeShown: true`)
+- **Getting Started Checklist**: 5-step task list with auto-tracking:
+  1. Create first project (auto-detected when projects exist)
+  2. Use AI assistant (auto-detected when AI generations exist)
+  3. Add character (marked on character creation)
+  4. View analytics (marked on analytics page visit)
+  5. Try export (marked on successful export)
+- **Single Source of Truth**: Checklist visibility based solely on `onboardingProgress.tourCompleted` (not `user.hasCompletedOnboarding`)
+- **Auto-Completion**: When all 5 steps complete, system automatically marks `tourCompleted: true` and updates `hasCompletedOnboarding: true`
+- **Step Handlers**: Distributed across dashboard, characters page, analytics page, and export menu
+- **Cache Invalidation**: Mutations invalidate both `/api/user/onboarding` and `/api/auth/user` to keep UI in sync
