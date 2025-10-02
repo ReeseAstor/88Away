@@ -104,8 +104,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/projects', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const validatedData = insertProjectSchema.parse(req.body);
+      const { template, ...projectData } = req.body;
+      const validatedData = insertProjectSchema.parse(projectData);
       const project = await storage.createProject(validatedData, userId);
+      
+      if (template && template !== 'blank') {
+        await storage.applyProjectTemplate(project.id, template, userId);
+      }
+      
       res.json(project);
     } catch (error) {
       console.error("Error creating project:", error);

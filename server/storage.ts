@@ -147,6 +147,9 @@ export interface IStorage {
   updateMergeEvent(mergeEventId: string, status: 'pending' | 'completed' | 'failed' | 'conflicted', metadata?: any): Promise<BranchMergeEvent>;
   getMergeEvents(documentId: string): Promise<BranchMergeEvent[]>;
   findCommonAncestor(branch1Id: string, branch2Id: string): Promise<DocumentVersion | undefined>;
+
+  // Template operations
+  applyProjectTemplate(projectId: string, template: string, authorId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1062,6 +1065,44 @@ export class DatabaseStorage implements IStorage {
     }
 
     return undefined;
+  }
+
+  async applyProjectTemplate(projectId: string, template: string, authorId: string): Promise<void> {
+    const { getTemplate } = await import('./templates');
+    const templateData = getTemplate(template as any);
+
+    // Create documents
+    for (const doc of templateData.documents) {
+      await this.createDocument({
+        ...doc,
+        projectId,
+        authorId,
+      });
+    }
+
+    // Create characters
+    for (const character of templateData.characters) {
+      await this.createCharacter({
+        ...character,
+        projectId,
+      });
+    }
+
+    // Create worldbuilding entries
+    for (const entry of templateData.worldbuilding) {
+      await this.createWorldbuildingEntry({
+        ...entry,
+        projectId,
+      });
+    }
+
+    // Create timeline events
+    for (const event of templateData.timeline) {
+      await this.createTimelineEvent({
+        ...event,
+        projectId,
+      });
+    }
   }
 }
 
