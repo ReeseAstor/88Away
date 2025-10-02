@@ -54,6 +54,15 @@ export const users = pgTable("users", {
 // Role enum for collaboration
 export const roleEnum = pgEnum('role', ['owner', 'editor', 'reviewer', 'reader']);
 
+// Character role enum
+export const characterRoleEnum = pgEnum('character_role', [
+  'protagonist', 
+  'antagonist', 
+  'supporting', 
+  'minor', 
+  'other'
+]);
+
 // Projects table
 export const projects = pgTable("projects", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -88,6 +97,9 @@ export const characters = pgTable("characters", {
   appearance: text("appearance"),
   relationships: jsonb("relationships"),
   notes: text("notes"),
+  role: characterRoleEnum("role"),
+  importance: integer("importance").default(3),
+  tags: text("tags").array(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
