@@ -2,6 +2,7 @@ import { db } from './db';
 import { 
   projects, 
   documents, 
+  documentVersions,
   characters, 
   worldbuildingEntries, 
   timelineEvents,
@@ -27,6 +28,20 @@ export interface ProjectAnalytics {
     daily: Array<{ date: string; words: number; sessions: number }>;
     weekly: Array<{ week: string; words: number; sessions: number }>;
     monthly: Array<{ month: string; words: number; sessions: number }>;
+    streak: {
+      currentStreak: number;
+      longestStreak: number;
+      lastActiveDate: string;
+    };
+    weeklyStats: {
+      totalWords: number;
+      averageDaily: number;
+      mostProductiveDay: string;
+    };
+    monthlyStats: {
+      totalWords: number;
+      averageDaily: number;
+    };
   };
   aiUsage: {
     totalGenerations: number;
@@ -183,6 +198,56 @@ export class AnalyticsService {
       .groupBy(sql`DATE_TRUNC('month', ${writingSessions.createdAt})`)
       .orderBy(sql`DATE_TRUNC('month', ${writingSessions.createdAt})`);
 
+    // Calculate writing streaks from document updates
+    const streak = await this.calculateWritingStreak(projectId);
+
+    // Calculate weekly stats
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const weeklyData = await db
+      .select({
+        date: sql<string>`DATE(${writingSessions.createdAt})`,
+        words: sum(writingSessions.wordsWritten),
+      })
+      .from(writingSessions)
+      .where(
+        and(
+          eq(writingSessions.projectId, projectId),
+          gte(writingSessions.createdAt, sevenDaysAgo)
+        )
+      )
+      .groupBy(sql`DATE(${writingSessions.createdAt})`);
+
+    const weeklyTotalWords = weeklyData.reduce((acc, row) => acc + (Number(row.words) || 0), 0);
+    const weeklyAverageDaily = weeklyData.length > 0 ? Math.round(weeklyTotalWords / 7) : 0;
+    
+    // Find most productive day this week
+    let mostProductiveDay = 'N/A';
+    let maxWords = 0;
+    for (const row of weeklyData) {
+      const words = Number(row.words) || 0;
+      if (words > maxWords) {
+        maxWords = words;
+        mostProductiveDay = new Date(row.date).toLocaleDateString('en-US', { weekday: 'long' });
+      }
+    }
+
+    // Calculate monthly stats
+    const thirtyOneDaysAgo = new Date(now.getTime() - 31 * 24 * 60 * 60 * 1000);
+    const monthlyData = await db
+      .select({
+        words: sum(writingSessions.wordsWritten),
+      })
+      .from(writingSessions)
+      .where(
+        and(
+          eq(writingSessions.projectId, projectId),
+          gte(writingSessions.createdAt, thirtyOneDaysAgo)
+        )
+      );
+
+    const monthlyTotalWords = Number(monthlyData[0]?.words) || 0;
+    const monthlyAverageDaily = Math.round(monthlyTotalWords / 31);
+
     return {
       daily: dailyProgress.map(row => ({
         date: row.date,
@@ -199,6 +264,105 @@ export class AnalyticsService {
         words: Number(row.words) || 0,
         sessions: Number(row.sessions) || 0,
       })),
+      streak,
+      weeklyStats: {
+        totalWords: weeklyTotalWords,
+        averageDaily: weeklyAverageDaily,
+        mostProductiveDay,
+      },
+      monthlyStats: {
+        totalWords: monthlyTotalWords,
+        averageDaily: monthlyAverageDaily,
+      },
+    };
+  }
+
+  private static async calculateWritingStreak(projectId: string): Promise<{
+    currentStreak: number;
+    longestStreak: number;
+    lastActiveDate: string;
+  }> {
+    // Get all unique dates when documents were updated or versions were created
+    const [documentDates, versionDates] = await Promise.all([
+      db
+        .select({ date: sql<string>`DATE(${documents.updatedAt})` })
+        .from(documents)
+        .where(eq(documents.projectId, projectId))
+        .groupBy(sql`DATE(${documents.updatedAt})`),
+      db
+        .select({ date: sql<string>`DATE(${documentVersions.createdAt})` })
+        .from(documentVersions)
+        .innerJoin(documents, eq(documentVersions.documentId, documents.id))
+        .where(eq(documents.projectId, projectId))
+        .groupBy(sql`DATE(${documentVersions.createdAt})`),
+    ]);
+
+    // Combine and deduplicate dates
+    const allDatesSet = new Set<string>();
+    documentDates.forEach(row => allDatesSet.add(row.date));
+    versionDates.forEach(row => allDatesSet.add(row.date));
+
+    // Convert to sorted array
+    const sortedDates = Array.from(allDatesSet)
+      .map(dateStr => new Date(dateStr))
+      .sort((a, b) => a.getTime() - b.getTime());
+
+    if (sortedDates.length === 0) {
+      return {
+        currentStreak: 0,
+        longestStreak: 0,
+        lastActiveDate: '',
+      };
+    }
+
+    const lastActiveDate = sortedDates[sortedDates.length - 1].toISOString().split('T')[0];
+
+    // Helper function to check if two dates are consecutive
+    const isConsecutive = (date1: Date, date2: Date): boolean => {
+      const diffMs = date2.getTime() - date1.getTime();
+      const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+      return diffDays === 1;
+    };
+
+    // Calculate longest streak
+    let longestStreak = 1;
+    let currentStreakCount = 1;
+
+    for (let i = 1; i < sortedDates.length; i++) {
+      if (isConsecutive(sortedDates[i - 1], sortedDates[i])) {
+        currentStreakCount++;
+        longestStreak = Math.max(longestStreak, currentStreakCount);
+      } else {
+        currentStreakCount = 1;
+      }
+    }
+
+    // Calculate current streak (counting backward from most recent date)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const mostRecentDate = sortedDates[sortedDates.length - 1];
+    mostRecentDate.setHours(0, 0, 0, 0);
+
+    // Check if the most recent writing was today or yesterday
+    const daysSinceLastWrite = Math.round((today.getTime() - mostRecentDate.getTime()) / (1000 * 60 * 60 * 24));
+    
+    let currentStreak = 0;
+    if (daysSinceLastWrite <= 1) {
+      // Start from the most recent date and count backward
+      currentStreak = 1;
+      for (let i = sortedDates.length - 2; i >= 0; i--) {
+        if (isConsecutive(sortedDates[i], sortedDates[i + 1])) {
+          currentStreak++;
+        } else {
+          break;
+        }
+      }
+    }
+
+    return {
+      currentStreak,
+      longestStreak,
+      lastActiveDate,
     };
   }
 
