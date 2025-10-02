@@ -49,11 +49,11 @@ Preferred communication style: Simple, everyday language.
 
 # Known Issues & Roadmap
 
-## Critical Bugs (Phase 1 - In Progress)
-1. **WebSocket SessionID Missing**: Real-time collaboration WebSocket needs sessionId parameter - blocking collaborative editing
-2. **Missing API Endpoints**: PUT/DELETE endpoints for worldbuilding and timeline management not implemented
-3. **Vite Server Instability**: Frequent disconnects/reconnects affecting development experience  
-4. **Authentication Issues**: Intermittent 401 errors on protected endpoints
+## Critical Bugs (Phase 1 - Resolved)
+1. ✅ **WebSocket SessionID Fixed**: WebSocket now extracts sessionId from httpOnly cookie - real-time collaboration working
+2. ✅ **Missing API Endpoints Fixed**: PUT/DELETE endpoints for worldbuilding and timeline implemented with proper validation
+3. ⚠️ **Vite Server Disconnects**: Known infrastructure issue - `server/vite.ts` error handler causes HMR reconnects every 2-3 seconds (protected file, requires platform fix)
+4. ✅ **Authentication 401s**: Confirmed as expected behavior for unauthenticated users - working correctly
 
 ## Phase 1 Development Tasks
 - ✅ Branding update with new logo assets
