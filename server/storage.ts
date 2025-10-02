@@ -107,6 +107,10 @@ export interface IStorage {
     metadata?: any;
   }): Promise<AiGeneration>;
   getUserAiGenerations(userId: string, limit?: number): Promise<AiGeneration[]>;
+  getUserAiUsage(userId: string, startDate: Date): Promise<{
+    count: number;
+    totalTokens: number;
+  }>;
 
   // Analysis cache operations
   saveAnalysisCache(key: string, data: any): Promise<void>;
@@ -546,6 +550,36 @@ export class DatabaseStorage implements IStorage {
       .where(eq(aiGenerations.userId, userId))
       .orderBy(desc(aiGenerations.createdAt))
       .limit(limit);
+  }
+
+  async getUserAiUsage(userId: string, startDate: Date): Promise<{
+    count: number;
+    totalTokens: number;
+  }> {
+    const generations = await db
+      .select()
+      .from(aiGenerations)
+      .where(
+        and(
+          eq(aiGenerations.userId, userId),
+          sql`${aiGenerations.createdAt} >= ${startDate}`
+        )
+      );
+
+    let totalTokens = 0;
+    for (const gen of generations) {
+      if (gen.metadata && typeof gen.metadata === 'object') {
+        const metadata = gen.metadata as any;
+        const tokensIn = metadata.tokens_in || 0;
+        const tokensOut = metadata.tokens_out || 0;
+        totalTokens += tokensIn + tokensOut;
+      }
+    }
+
+    return {
+      count: generations.length,
+      totalTokens
+    };
   }
 
   // Analysis cache operations  

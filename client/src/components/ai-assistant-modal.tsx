@@ -9,16 +9,18 @@ import { Slider } from "@/components/ui/slider";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { 
   Lightbulb, 
   Edit3, 
   FileText, 
   Zap,
-  Crown
+  Crown,
+  Infinity
 } from "lucide-react";
 
 interface AiAssistantModalProps {
@@ -37,6 +39,19 @@ export default function AiAssistantModal({ open, onClose, projects }: AiAssistan
   const [creativity, setCreativity] = useState([70]);
   const [length, setLength] = useState("medium");
   const [result, setResult] = useState<string | null>(null);
+
+  // Fetch AI usage data
+  const { data: usageData, isLoading: usageLoading } = useQuery<{
+    used: number;
+    limit: number;
+    remaining: number;
+    tokens_used: number;
+    resetDate: string;
+    plan: string;
+  }>({
+    queryKey: ['/api/ai/usage'],
+    enabled: open,
+  });
 
   const personas = [
     {
@@ -87,6 +102,7 @@ export default function AiAssistantModal({ open, onClose, projects }: AiAssistan
     },
     onSuccess: (data) => {
       setResult(typeof data.content === "string" ? data.content : JSON.stringify(data.content, null, 2));
+      queryClient.invalidateQueries({ queryKey: ['/api/ai/usage'] });
       toast({
         title: "Content Generated",
         description: "Your AI assistant has created new content!",
@@ -275,10 +291,27 @@ export default function AiAssistantModal({ open, onClose, projects }: AiAssistan
               
               <div className="flex items-center justify-between pt-4 border-t border-border">
                 <div className="flex items-center space-x-2">
-                  <Crown className="h-4 w-4 text-chart-1" />
-                  <div className="text-sm text-muted-foreground">
-                    <span className="font-medium text-chart-1">24</span> / 100 AI sessions remaining
-                  </div>
+                  {usageLoading ? (
+                    <Skeleton className="h-5 w-40" />
+                  ) : usageData ? (
+                    <>
+                      {usageData.limit === -1 ? (
+                        <>
+                          <Infinity className="h-4 w-4 text-chart-1" />
+                          <div className="text-sm text-muted-foreground">
+                            <span className="font-medium text-chart-1">Unlimited</span> AI generations
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <Crown className="h-4 w-4 text-chart-1" />
+                          <div className="text-sm text-muted-foreground" data-testid="text-ai-usage">
+                            <span className="font-medium text-chart-1">{usageData.remaining}</span> / {usageData.limit} AI sessions remaining
+                          </div>
+                        </>
+                      )}
+                    </>
+                  ) : null}
                 </div>
                 <div className="flex space-x-3">
                   <Button 
@@ -291,7 +324,12 @@ export default function AiAssistantModal({ open, onClose, projects }: AiAssistan
                   </Button>
                   <Button 
                     onClick={handleGenerate}
-                    disabled={generateMutation.isPending || !selectedPersona || !prompt.trim()}
+                    disabled={
+                      generateMutation.isPending || 
+                      !selectedPersona || 
+                      !prompt.trim() || 
+                      (usageData && usageData.limit !== -1 && usageData.remaining <= 0)
+                    }
                     data-testid="button-ai-generate"
                   >
                     {generateMutation.isPending ? (
