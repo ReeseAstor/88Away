@@ -47,6 +47,24 @@ Preferred communication style: Simple, everyday language.
 - **TypeScript Compilation**: Strict type checking across the entire stack
 - **Path Aliases**: Clean import structure with @ aliases for components and shared code
 
+# Known Issues & Roadmap
+
+## Critical Bugs (Phase 1 - In Progress)
+1. **WebSocket SessionID Missing**: Real-time collaboration WebSocket needs sessionId parameter - blocking collaborative editing
+2. **Missing API Endpoints**: PUT/DELETE endpoints for worldbuilding and timeline management not implemented
+3. **Vite Server Instability**: Frequent disconnects/reconnects affecting development experience  
+4. **Authentication Issues**: Intermittent 401 errors on protected endpoints
+
+## Phase 1 Development Tasks
+- ✅ Branding update with new logo assets
+- ✅ AI Assistant integration (Muse, Editor, Coach personas)
+- 🔄 Core bug fixes and stability improvements
+- 📋 Document editor enhancements
+- 📋 Project templates implementation
+- 📋 Word count tracking and analytics
+- 📋 Export system (PDF, Word)
+- 📋 Onboarding flow for new users
+
 # External Dependencies
 
 ## Core Infrastructure
