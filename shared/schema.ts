@@ -35,6 +35,18 @@ export const users = pgTable("users", {
   stripeSubscriptionId: varchar("stripe_subscription_id"),
   subscriptionStatus: varchar("subscription_status").default("inactive"),
   subscriptionPlan: varchar("subscription_plan"),
+  hasCompletedOnboarding: boolean("has_completed_onboarding").default(false),
+  onboardingProgress: jsonb("onboarding_progress").$type<{
+    welcomeShown: boolean;
+    steps: {
+      createProject: boolean;
+      useAI: boolean;
+      addCharacter: boolean;
+      viewAnalytics: boolean;
+      tryExport: boolean;
+    };
+    tourCompleted: boolean;
+  }>(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -609,4 +621,16 @@ export type DocumentBranchWithVersions = DocumentBranch & {
 export type BranchWithChildren = DocumentBranch & {
   childBranches: DocumentBranch[];
   parentBranch?: DocumentBranch | null;
+};
+
+export type OnboardingProgress = {
+  welcomeShown: boolean;
+  steps: {
+    createProject: boolean;
+    useAI: boolean;
+    addCharacter: boolean;
+    viewAnalytics: boolean;
+    tryExport: boolean;
+  };
+  tourCompleted: boolean;
 };

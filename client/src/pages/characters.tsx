@@ -22,7 +22,7 @@ import {
   Heart,
   MapPin
 } from "lucide-react";
-import { Project, Character } from "@shared/schema";
+import { Project, Character, type OnboardingProgress } from "@shared/schema";
 
 export default function Characters() {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -80,6 +80,22 @@ export default function Characters() {
     retry: false,
   });
 
+  const { data: onboardingProgress } = useQuery<OnboardingProgress>({
+    queryKey: ['/api/user/onboarding'],
+    enabled: isAuthenticated,
+    retry: false,
+  });
+
+  const updateOnboardingMutation = useMutation({
+    mutationFn: async (progress: Partial<OnboardingProgress>) => {
+      await apiRequest("PATCH", "/api/user/onboarding", progress);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/user/onboarding'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
+    },
+  });
+
   const createCharacterMutation = useMutation({
     mutationFn: async (characterData: any) => {
       if (projects.length === 0) throw new Error("No project available");
@@ -100,6 +116,12 @@ export default function Characters() {
         title: "Success",
         description: "Character created successfully!",
       });
+      
+      if (user && !user.hasCompletedOnboarding && onboardingProgress && !onboardingProgress.steps.addCharacter) {
+        updateOnboardingMutation.mutate({
+          steps: { ...onboardingProgress.steps, addCharacter: true }
+        });
+      }
     },
     onError: (error) => {
       if (isUnauthorizedError(error)) {

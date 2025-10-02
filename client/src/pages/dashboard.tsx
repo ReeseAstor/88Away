@@ -12,6 +12,8 @@ import { apiRequest } from "@/lib/queryClient";
 import Sidebar from "@/components/sidebar";
 import ProjectModal from "@/components/project-modal";
 import AiAssistantModal from "@/components/ai-assistant-modal";
+import OnboardingWelcome from "@/components/onboarding-welcome";
+import GettingStartedChecklist from "@/components/getting-started-checklist";
 import { useState } from "react";
 import { Link } from "wouter";
 import { 
@@ -29,7 +31,7 @@ import {
   Bot,
   Download
 } from "lucide-react";
-import { Project, AiGeneration } from "@shared/schema";
+import { Project, AiGeneration, type OnboardingProgress } from "@shared/schema";
 
 interface DashboardStats {
   totalWords: number;
@@ -45,6 +47,8 @@ export default function Dashboard() {
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [showAiModal, setShowAiModal] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const [showChecklist, setShowChecklist] = useState(false);
 
   // Redirect to home if not authenticated
   useEffect(() => {
@@ -72,6 +76,65 @@ export default function Dashboard() {
     enabled: isAuthenticated,
     retry: false,
   });
+
+  const { data: onboardingProgress } = useQuery<OnboardingProgress>({
+    queryKey: ['/api/user/onboarding'],
+    enabled: isAuthenticated,
+    retry: false,
+  });
+
+  const updateOnboardingMutation = useMutation({
+    mutationFn: async (progress: Partial<OnboardingProgress>) => {
+      await apiRequest("PATCH", "/api/user/onboarding", progress);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/user/onboarding'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
+    },
+  });
+
+  useEffect(() => {
+    if (isAuthenticated && onboardingProgress && !onboardingProgress.welcomeShown) {
+      setShowWelcomeModal(true);
+    }
+  }, [isAuthenticated, onboardingProgress]);
+
+  useEffect(() => {
+    if (isAuthenticated && onboardingProgress && !onboardingProgress.tourCompleted) {
+      const hasIncompleteSteps = Object.values(onboardingProgress.steps || {}).some(completed => !completed);
+      setShowChecklist(hasIncompleteSteps);
+    } else {
+      setShowChecklist(false);
+    }
+  }, [isAuthenticated, onboardingProgress]);
+
+  useEffect(() => {
+    if (projects.length > 0 && onboardingProgress && !onboardingProgress.steps.createProject) {
+      updateOnboardingMutation.mutate({
+        steps: { ...onboardingProgress.steps, createProject: true }
+      });
+    }
+  }, [projects.length, onboardingProgress]);
+
+  useEffect(() => {
+    if (aiGenerations.length > 0 && onboardingProgress && !onboardingProgress.steps.useAI) {
+      updateOnboardingMutation.mutate({
+        steps: { ...onboardingProgress.steps, useAI: true }
+      });
+    }
+  }, [aiGenerations.length, onboardingProgress]);
+
+  useEffect(() => {
+    if (onboardingProgress && !onboardingProgress.tourCompleted) {
+      const allStepsComplete = Object.values(onboardingProgress.steps || {}).every(completed => completed);
+      if (allStepsComplete) {
+        updateOnboardingMutation.mutate({
+          tourCompleted: true,
+          steps: { ...onboardingProgress.steps }
+        });
+      }
+    }
+  }, [onboardingProgress]);
 
   // Calculate dashboard stats
   const stats: DashboardStats = {
@@ -112,6 +175,24 @@ export default function Dashboard() {
       });
     },
   });
+
+  const handleWelcomeComplete = () => {
+    updateOnboardingMutation.mutate({ welcomeShown: true });
+    setShowWelcomeModal(false);
+  };
+
+  const handleWelcomeSkip = () => {
+    updateOnboardingMutation.mutate({ welcomeShown: true });
+    setShowWelcomeModal(false);
+  };
+
+  const handleRestartTour = () => {
+    setShowWelcomeModal(true);
+  };
+
+  const handleDismissChecklist = () => {
+    setShowChecklist(false);
+  };
 
   if (!isAuthenticated || isLoading) {
     return (
@@ -560,6 +641,21 @@ export default function Dashboard() {
         onClose={() => setShowAiModal(false)}
         projects={projects}
       />
+
+      {/* Onboarding Components */}
+      <OnboardingWelcome
+        open={showWelcomeModal}
+        onClose={handleWelcomeSkip}
+        onComplete={handleWelcomeComplete}
+      />
+
+      {showChecklist && onboardingProgress && (
+        <GettingStartedChecklist
+          steps={onboardingProgress.steps}
+          onRestartTour={handleRestartTour}
+          onDismiss={handleDismissChecklist}
+        />
+      )}
     </div>
   );
 }

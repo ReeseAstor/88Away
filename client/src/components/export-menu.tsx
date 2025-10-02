@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -10,6 +11,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Download, FileText, File, Globe, Crown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { apiRequest } from "@/lib/queryClient";
+import { type OnboardingProgress } from "@shared/schema";
 
 interface ExportMenuProps {
   projectId: string;
@@ -19,7 +23,25 @@ interface ExportMenuProps {
 
 export default function ExportMenu({ projectId, projectTitle, userPlan = "starter" }: ExportMenuProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [isExporting, setIsExporting] = useState(false);
+
+  const { data: onboardingProgress } = useQuery<OnboardingProgress>({
+    queryKey: ['/api/user/onboarding'],
+    enabled: !!user,
+    retry: false,
+  });
+
+  const updateOnboardingMutation = useMutation({
+    mutationFn: async (progress: Partial<OnboardingProgress>) => {
+      await apiRequest("PATCH", "/api/user/onboarding", progress);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/user/onboarding'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
+    },
+  });
 
   const handleExport = async (format: string) => {
     // Check if user has access to advanced formats
@@ -53,6 +75,12 @@ export default function ExportMenu({ projectId, projectTitle, userPlan = "starte
         title: "Export Started",
         description: `Your ${format.toUpperCase()} export is being generated and will download shortly.`,
       });
+
+      if (user && !user.hasCompletedOnboarding && onboardingProgress && !onboardingProgress.steps.tryExport) {
+        updateOnboardingMutation.mutate({
+          steps: { ...onboardingProgress.steps, tryExport: true }
+        });
+      }
     } catch (error) {
       console.error("Export error:", error);
       toast({

@@ -1,5 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useLocation } from 'wouter';
+import { apiRequest } from '@/lib/queryClient';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
@@ -41,6 +43,7 @@ import {
 } from 'recharts';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
+import { type OnboardingProgress } from '@shared/schema';
 
 interface ProjectAnalytics {
   overview: {
@@ -102,11 +105,36 @@ export default function AnalyticsPage() {
   const { id: projectId } = useParams();
   const [, setLocation] = useLocation();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
 
   const { data: analytics, isLoading, error } = useQuery<ProjectAnalytics>({
     queryKey: ['/api/projects', projectId, 'analytics'],
     enabled: !!projectId
   });
+
+  const { data: onboardingProgress } = useQuery<OnboardingProgress>({
+    queryKey: ['/api/user/onboarding'],
+    enabled: !!user,
+    retry: false,
+  });
+
+  const updateOnboardingMutation = useMutation({
+    mutationFn: async (progress: Partial<OnboardingProgress>) => {
+      await apiRequest("PATCH", "/api/user/onboarding", progress);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/user/onboarding'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
+    },
+  });
+
+  useEffect(() => {
+    if (user && !user.hasCompletedOnboarding && onboardingProgress && !onboardingProgress.steps.viewAnalytics) {
+      updateOnboardingMutation.mutate({
+        steps: { ...onboardingProgress.steps, viewAnalytics: true }
+      });
+    }
+  }, [user, onboardingProgress]);
 
   if (isLoading) {
     return (

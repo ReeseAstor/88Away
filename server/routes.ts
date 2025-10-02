@@ -66,6 +66,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Onboarding routes
+  app.get('/api/user/onboarding', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const progress = await storage.getUserOnboarding(userId);
+      res.json(progress || {
+        welcomeShown: false,
+        steps: {
+          createProject: false,
+          useAI: false,
+          addCharacter: false,
+          viewAnalytics: false,
+          tryExport: false,
+        },
+        tourCompleted: false,
+      });
+    } catch (error) {
+      console.error("Error fetching onboarding progress:", error);
+      res.status(500).json({ message: "Failed to fetch onboarding progress" });
+    }
+  });
+
+  app.patch('/api/user/onboarding', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const progressSchema = z.object({
+        welcomeShown: z.boolean().optional(),
+        steps: z.object({
+          createProject: z.boolean().optional(),
+          useAI: z.boolean().optional(),
+          addCharacter: z.boolean().optional(),
+          viewAnalytics: z.boolean().optional(),
+          tryExport: z.boolean().optional(),
+        }).optional(),
+        tourCompleted: z.boolean().optional(),
+      });
+      
+      const validatedData = progressSchema.parse(req.body);
+      const user = await storage.updateUserOnboarding(userId, validatedData);
+      res.json(user);
+    } catch (error) {
+      console.error("Error updating onboarding progress:", error);
+      res.status(500).json({ message: "Failed to update onboarding progress" });
+    }
+  });
+
   // Project routes
   app.get('/api/projects', isAuthenticated, async (req: any, res) => {
     try {
