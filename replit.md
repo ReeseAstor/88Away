@@ -55,15 +55,20 @@ Preferred communication style: Simple, everyday language.
 3. ⚠️ **Vite Server Disconnects**: Known infrastructure issue - `server/vite.ts` error handler causes HMR reconnects every 2-3 seconds (protected file, requires platform fix)
 4. ✅ **Authentication 401s**: Confirmed as expected behavior for unauthenticated users - working correctly
 
-## Phase 1 Development Tasks
-- ✅ Branding update with new logo assets
-- ✅ AI Assistant integration (Muse, Editor, Coach personas)
-- 🔄 Core bug fixes and stability improvements
-- 📋 Document editor enhancements
-- 📋 Project templates implementation
-- 📋 Word count tracking and analytics
-- 📋 Export system (PDF, Word)
-- 📋 Onboarding flow for new users
+## Phase 1 Development Tasks (12 Total)
+- ✅ Task 1: Audit application for critical bugs
+- ✅ Task 1a-1d: Fix critical bugs (WebSocket auth, missing API endpoints, error handling)
+- ✅ Task 2: Enhanced document editor (10+ formatting options, autosave indicator)
+- ✅ Task 3: Project templates (Novel, Screenplay, Short Story with pre-populated content)
+- ✅ Task 4: Word count tracking (real-time display, project aggregation, goal progress)
+- 📋 Task 5: AI context awareness (character/worldbuilding data integration)
+- 📋 Task 6: Refine AI system prompts
+- 📋 Task 7: AI usage analytics and session tracking
+- 📋 Task 8: Export system (PDF, Word)
+- 📋 Task 9: Onboarding flow for new users
+- 📋 Task 10: Writing progress dashboard
+- 📋 Task 11: Character database UX improvements
+- 📋 Task 12: Timeline visualization enhancements
 
 # External Dependencies
 
@@ -82,3 +87,17 @@ Preferred communication style: Simple, everyday language.
 - **Vite**: Build tool with React plugin and development server
 - **Drizzle Kit**: Database migration and introspection tools
 - **TypeScript**: Static type checking and compilation
+
+# Design Decisions
+
+## Word Count Calculation
+The application uses standard word counting methodology (follows Microsoft Word/Google Docs conventions):
+- **Shared Logic**: `shared/utils.ts` provides `calculateWordCount()` used by both client and server
+- **HTML Processing**: Strips HTML tags, decodes common entities (&nbsp;, &mdash;, etc.)
+- **Splitting**: Uses whitespace-only splitting (standard practice)
+- **Examples**:
+  - "Hello—world" (em dash, no spaces) = 1 word (compound)
+  - "Hello — world" (em dash with spaces) = 2 words
+  - "Hello&nbsp;world" = 2 words (non-breaking space decoded)
+- **Consistency**: Client (editor display) and server (storage) use identical logic
+- **Aggregation**: Project word count = sum of all document word counts (updated on each document save)

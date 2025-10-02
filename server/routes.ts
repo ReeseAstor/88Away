@@ -640,6 +640,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const validatedData = insertDocumentSchema.partial().parse(req.body);
       const updated = await storage.updateDocument(req.params.id, validatedData, userId);
+      
+      // Recalculate project's total word count
+      const allDocuments = await storage.getProjectDocuments(document.projectId);
+      const totalWordCount = allDocuments.reduce((sum, doc) => sum + (doc.wordCount || 0), 0);
+      await storage.updateProject(document.projectId, { currentWordCount: totalWordCount });
+      
       res.json(updated);
     } catch (error) {
       console.error("Error updating document:", error);
