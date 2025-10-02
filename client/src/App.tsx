@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
+import { Footer } from "@/components/footer";
 import Landing from "@/pages/landing";
 import Dashboard from "@/pages/dashboard";
 import Project from "@/pages/project";
@@ -12,6 +13,9 @@ import Worldbuilding from "@/pages/worldbuilding";
 import Timeline from "@/pages/timeline";
 import Analytics from "@/pages/analytics";
 import Subscription from "@/pages/subscription";
+import Privacy from "@/pages/privacy";
+import Terms from "@/pages/terms";
+import Cookies from "@/pages/cookies";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -19,6 +23,9 @@ function Router() {
 
   return (
     <Switch>
+      <Route path="/privacy" component={Privacy} />
+      <Route path="/terms" component={Terms} />
+      <Route path="/cookies" component={Cookies} />
       {isLoading || !isAuthenticated ? (
         <Route path="/" component={Landing} />
       ) : (
@@ -43,6 +50,7 @@ function App() {
       <TooltipProvider>
         <Toaster />
         <Router />
+        <Footer />
       </TooltipProvider>
     </QueryClientProvider>
   );
