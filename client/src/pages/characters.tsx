@@ -53,7 +53,12 @@ export default function Characters() {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState<'name-asc' | 'name-desc' | 'newest' | 'oldest' | 'updated'>('name-asc');
   const [roleFilter, setRoleFilter] = useState<string>('all');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('characterViewMode') as 'grid' | 'list') || 'grid';
+    }
+    return 'grid';
+  });
   const [tagInput, setTagInput] = useState("");
   
   const [formData, setFormData] = useState<{
@@ -63,7 +68,7 @@ export default function Characters() {
     personality: string;
     appearance: string;
     notes: string;
-    role: string;
+    role: Character["role"];
     importance: number;
     tags: string[];
   }>({
@@ -73,7 +78,7 @@ export default function Characters() {
     personality: "",
     appearance: "",
     notes: "",
-    role: "",
+    role: null,
     importance: 3,
     tags: []
   });
@@ -146,7 +151,7 @@ export default function Characters() {
         personality: "",
         appearance: "",
         notes: "",
-        role: "",
+        role: null,
         importance: 3,
         tags: []
       });
@@ -274,7 +279,7 @@ export default function Characters() {
     
     const dataToSubmit = {
       ...formData,
-      role: formData.role || null,
+      role: formData.role ?? null,
       tags: formData.tags.length > 0 ? formData.tags : null
     };
     
@@ -292,14 +297,14 @@ export default function Characters() {
     setEditingCharacter(character);
     setFormData({
       name: character.name,
-      description: character.description || "",
-      background: character.background || "",
-      personality: character.personality || "",
-      appearance: character.appearance || "",
-      notes: character.notes || "",
-      role: character.role || "",
-      importance: character.importance || 3,
-      tags: character.tags || []
+      description: character.description ?? "",
+      background: character.background ?? "",
+      personality: character.personality ?? "",
+      appearance: character.appearance ?? "",
+      notes: character.notes ?? "",
+      role: character.role ?? null,
+      importance: character.importance ?? 3,
+      tags: character.tags ?? []
     });
     setShowCharacterModal(true);
   };
@@ -321,7 +326,7 @@ export default function Characters() {
       personality: "",
       appearance: "",
       notes: "",
-      role: "",
+      role: null,
       importance: 3,
       tags: []
     });
@@ -417,7 +422,13 @@ export default function Characters() {
             <Button 
               variant="outline" 
               size="icon" 
-              onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+              onClick={() => {
+                const newMode = viewMode === 'grid' ? 'list' : 'grid';
+                setViewMode(newMode);
+                if (typeof window !== 'undefined') {
+                  localStorage.setItem('characterViewMode', newMode);
+                }
+              }}
               data-testid="button-view-toggle"
             >
               {viewMode === 'grid' ? <List className="h-4 w-4" /> : <Grid className="h-4 w-4" />}
@@ -499,17 +510,17 @@ export default function Characters() {
                                   key={i} 
                                   className={cn(
                                     "w-3 h-3",
-                                    i < (character.importance || 3) ? "fill-yellow-500 text-yellow-500" : "text-muted"
+                                    i < (character.importance ?? 3) ? "fill-yellow-500 text-yellow-500" : "text-muted"
                                   )} 
                                 />
                               ))}
                             </div>
-                            {character.relationships && typeof character.relationships === 'object' && Object.keys(character.relationships).length > 0 && (
+                            {character.relationships && typeof character.relationships === 'object' && character.relationships !== null && Object.keys(character.relationships as Record<string, unknown>).length > 0 ? (
                               <span className="text-xs flex items-center gap-1">
                                 <Heart className="w-3 h-3" />
-                                {Object.keys(character.relationships).length}
+                                {Object.keys(character.relationships as Record<string, unknown>).length}
                               </span>
-                            )}
+                            ) : null}
                           </CardDescription>
                         </div>
                       </div>
@@ -610,7 +621,7 @@ export default function Characters() {
 
             <div className="space-y-2">
               <Label htmlFor="role">Role</Label>
-              <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value })}>
+              <Select value={formData.role ?? undefined} onValueChange={(value) => setFormData({ ...formData, role: value as Character["role"] })}>
                 <SelectTrigger data-testid="select-character-role">
                   <SelectValue placeholder="Select a role" />
                 </SelectTrigger>
