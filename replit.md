@@ -64,7 +64,7 @@ Preferred communication style: Simple, everyday language.
 - ✅ Task 5: AI context awareness (character/worldbuilding/timeline data auto-injected into AI prompts)
 - ✅ Task 6: Refined AI system prompts (enhanced with context usage, structure, safety)
 - ✅ Task 7: AI usage analytics (token tracking, subscription-based limits, enforcement, enhanced visualizations)
-- 📋 Task 8: Export system (PDF, Word)
+- ✅ Task 8: Export system (JSON, HTML, PDF, ePub, Word/DOCX with proper TipTap formatting preservation)
 - 📋 Task 9: Onboarding flow for new users
 - 📋 Task 10: Writing progress dashboard
 - 📋 Task 11: Character database UX improvements

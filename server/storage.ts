@@ -43,6 +43,7 @@ import {
   type InsertDocumentComment,
   type CollaborationPresence,
   type InsertCollaborationPresence,
+  type OnboardingProgress,
 } from "@shared/schema";
 import { calculateWordCount } from "@shared/utils";
 import { db } from "./db";
@@ -56,6 +57,8 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
   updateUserStripeInfo(userId: string, customerId: string, subscriptionId: string): Promise<User>;
+  getUserOnboarding(userId: string): Promise<OnboardingProgress | undefined>;
+  updateUserOnboarding(userId: string, progress: Partial<OnboardingProgress>): Promise<User>;
 
   // Project operations
   getUserProjects(userId: string): Promise<Project[]>;
@@ -196,6 +199,42 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, userId))
       .returning();
     return user;
+  }
+
+  async getUserOnboarding(userId: string): Promise<OnboardingProgress | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
+    return user?.onboardingProgress as OnboardingProgress | undefined;
+  }
+
+  async updateUserOnboarding(userId: string, progress: Partial<OnboardingProgress>): Promise<User> {
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
+    
+    const currentProgress = user?.onboardingProgress as OnboardingProgress | null;
+    const updatedProgress: OnboardingProgress = {
+      welcomeShown: progress.welcomeShown ?? currentProgress?.welcomeShown ?? false,
+      steps: {
+        createProject: progress.steps?.createProject ?? currentProgress?.steps?.createProject ?? false,
+        useAI: progress.steps?.useAI ?? currentProgress?.steps?.useAI ?? false,
+        addCharacter: progress.steps?.addCharacter ?? currentProgress?.steps?.addCharacter ?? false,
+        viewAnalytics: progress.steps?.viewAnalytics ?? currentProgress?.steps?.viewAnalytics ?? false,
+        tryExport: progress.steps?.tryExport ?? currentProgress?.steps?.tryExport ?? false,
+      },
+      tourCompleted: progress.tourCompleted ?? currentProgress?.tourCompleted ?? false,
+    };
+
+    const allStepsComplete = Object.values(updatedProgress.steps).every(step => step === true);
+
+    const [updatedUser] = await db
+      .update(users)
+      .set({
+        onboardingProgress: updatedProgress,
+        hasCompletedOnboarding: allStepsComplete && updatedProgress.tourCompleted,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    
+    return updatedUser;
   }
 
   // Project operations
