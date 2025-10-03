@@ -386,6 +386,24 @@ export const emails = pgTable("emails", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// SMS status enum
+export const smsStatusEnum = pgEnum('sms_status', ['sent', 'failed']);
+
+// SMS table for Brevo SMS tracking
+export const sms = pgTable("sms", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  recipient: text("recipient").notNull(),
+  message: text("message").notNull(),
+  sender: text("sender"),
+  status: smsStatusEnum("status").notNull(),
+  brevoMessageId: text("brevo_message_id"),
+  error: text("error"),
+  sentAt: timestamp("sent_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   ownedProjects: many(projects),
@@ -403,6 +421,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   triggeredNotifications: many(notifications),
   activities: many(activities),
   emails: many(emails),
+  sms: many(sms),
 }));
 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
@@ -642,6 +661,13 @@ export const emailsRelations = relations(emails, ({ one }) => ({
   }),
 }));
 
+export const smsRelations = relations(sms, ({ one }) => ({
+  user: one(users, {
+    fields: [sms.userId],
+    references: [users.id],
+  }),
+}));
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).pick({
   email: true,
@@ -738,6 +764,13 @@ export const insertEmailSchema = createInsertSchema(emails).omit({
   updatedAt: true,
 });
 
+// SMS insert schema
+export const insertSmsSchema = createInsertSchema(sms).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Branching insert schemas
 export const insertDocumentBranchSchema = createInsertSchema(documentBranches).omit({
   id: true,
@@ -815,6 +848,10 @@ export type InsertUserFavoritePrompt = z.infer<typeof insertUserFavoritePromptSc
 // Email types
 export type Email = typeof emails.$inferSelect;
 export type InsertEmail = z.infer<typeof insertEmailSchema>;
+
+// SMS types
+export type Sms = typeof sms.$inferSelect;
+export type InsertSms = z.infer<typeof insertSmsSchema>;
 
 // Extended types with relations
 export type ProjectWithCollaborators = Project & {

@@ -34,6 +34,7 @@ import {
   insertDocumentVersionSchema,
   insertBranchMergeEventSchema,
   insertEmailSchema,
+  insertSmsSchema,
 } from "@shared/schema";
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
@@ -49,6 +50,12 @@ import {
   listUserEmails 
 } from "./brevoService";
 import { processScheduledEmails } from "./emailScheduler";
+import {
+  sendSms,
+  sendBatchSms,
+  listUserSms,
+  getSmsById,
+} from "./brevoSmsService";
 
 let stripe: Stripe | null = null;
 
@@ -3198,6 +3205,160 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error processing scheduled emails:", error);
       res.status(500).json({ message: "Failed to process scheduled emails" });
+    }
+  });
+
+  // SMS routes
+  app.post('/api/sms/send', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      const validationResult = insertSmsSchema.safeParse({
+        ...req.body,
+        userId,
+      });
+
+      if (!validationResult.success) {
+        const validationError = fromZodError(validationResult.error);
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          error: validationError.message,
+          details: validationResult.error.errors 
+        });
+      }
+
+      const { data } = validationResult;
+      const smsRecord = await sendSms({
+        userId: data.userId,
+        to: data.recipient,
+        message: data.message,
+        sender: data.sender || undefined,
+      });
+
+      res.json(smsRecord);
+    } catch (error) {
+      console.error("Error sending SMS:", error);
+      res.status(500).json({ message: "Failed to send SMS" });
+    }
+  });
+
+  app.post('/api/sms/batch', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { messages: messageList } = req.body;
+
+      if (!Array.isArray(messageList)) {
+        return res.status(400).json({ message: "messages must be an array" });
+      }
+
+      const validatedMessages = [];
+      const validationErrors = [];
+
+      for (let i = 0; i < messageList.length; i++) {
+        const validationResult = insertSmsSchema.safeParse({
+          ...messageList[i],
+          userId,
+        });
+
+        if (!validationResult.success) {
+          const validationError = fromZodError(validationResult.error);
+          validationErrors.push({
+            index: i,
+            message: validationError.message,
+            details: validationResult.error.errors,
+          });
+        } else {
+          validatedMessages.push(validationResult.data);
+        }
+      }
+
+      if (validationErrors.length > 0) {
+        return res.status(400).json({
+          message: "Validation failed for one or more messages",
+          errors: validationErrors,
+        });
+      }
+
+      const cleanedMessages = validatedMessages.map(data => ({
+        to: data.recipient,
+        message: data.message,
+        sender: data.sender || undefined,
+      }));
+
+      const results = await sendBatchSms({
+        userId,
+        messages: cleanedMessages,
+      });
+
+      res.json({ results });
+    } catch (error) {
+      console.error("Error sending batch SMS:", error);
+      res.status(500).json({ message: "Failed to send batch SMS" });
+    }
+  });
+
+  app.get('/api/sms/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const smsId = parseInt(req.params.id);
+
+      const smsRecord = await getSmsById(smsId);
+
+      if (smsRecord.userId !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      res.json(smsRecord);
+    } catch (error) {
+      console.error("Error fetching SMS:", error);
+      res.status(500).json({ message: "Failed to fetch SMS details" });
+    }
+  });
+
+  app.get('/api/sms', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { status, startDate, endDate, page, limit } = req.query;
+
+      const filters: any = {};
+
+      if (status && (status === 'sent' || status === 'failed')) {
+        filters.status = status;
+      }
+
+      if (startDate || endDate) {
+        filters.dateRange = {};
+        if (startDate) {
+          filters.dateRange.from = new Date(startDate as string);
+        }
+        if (endDate) {
+          filters.dateRange.to = new Date(endDate as string);
+        }
+      }
+
+      if (limit) {
+        filters.limit = parseInt(limit as string);
+      }
+
+      if (page) {
+        const pageNum = parseInt(page as string);
+        const pageSize = filters.limit || 50;
+        filters.offset = (pageNum - 1) * pageSize;
+      }
+
+      const result = await listUserSms(userId, filters);
+
+      const totalPages = Math.ceil(result.total / (filters.limit || 50));
+
+      res.json({
+        sms: result.sms,
+        total: result.total,
+        totalPages,
+        currentPage: page ? parseInt(page as string) : 1,
+      });
+    } catch (error) {
+      console.error("Error listing SMS:", error);
+      res.status(500).json({ message: "Failed to list SMS" });
     }
   });
 
