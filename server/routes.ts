@@ -48,6 +48,7 @@ import {
   getEmailStatus, 
   listUserEmails 
 } from "./brevoService";
+import { processScheduledEmails } from "./emailScheduler";
 
 let stripe: Stripe | null = null;
 
@@ -3187,6 +3188,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error listing emails:", error);
       res.status(500).json({ message: "Failed to list emails" });
+    }
+  });
+
+  app.post('/api/emails/process-scheduled', isAuthenticated, async (req: any, res) => {
+    try {
+      const summary = await processScheduledEmails();
+      res.json(summary);
+    } catch (error) {
+      console.error("Error processing scheduled emails:", error);
+      res.status(500).json({ message: "Failed to process scheduled emails" });
     }
   });
 

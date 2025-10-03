@@ -19,6 +19,7 @@ Preferred communication style: Simple, everyday language.
 - **Framework**: Express.js with TypeScript for RESTful API services.
 - **Database**: Neon (serverless PostgreSQL) with Drizzle ORM for type-safe database interactions.
 - **AI Integration**: OpenAI's GPT-5 model powers three distinct AI personas (Muse, Editor, Coach) with safety filtering and structured JSON outputs.
+- **Email Service**: Brevo (formerly Sendinblue) integration for transactional email delivery with dedicated service layer for send, batch, schedule, and tracking operations.
 
 ## Authentication & Authorization
 - **Authentication**: Replit Auth (OIDC-based) for secure session management.
@@ -46,12 +47,14 @@ Preferred communication style: Simple, everyday language.
 - **Activity Feed**: Comprehensive project activity logging visible to all collaborators, distinct from personal notifications.
 - **Global Search**: Multi-table search functionality across documents, characters, worldbuilding, and timeline events with relevance ranking and access control.
 - **Prompt Library**: Professional writing prompt library with 1008+ curated prompts across 10 categories (Character Development, Plot & Story Structure, Dialogue, Scene Writing, Worldbuilding, Editing, Genre-Specific, Ghostwriting, Marketing, Publishing Prep). Features search with debouncing, multi-dimensional filtering (category, persona, role, featured), favorites system, usage tracking, and one-click AI integration via Zustand store that pre-fills AI modal with prompt content and appropriate persona.
+- **Email Management**: Transactional email system powered by Brevo API with comprehensive send, batch send, and scheduling capabilities. Features include single email sending, batch email processing with per-email success/failure reporting, future-dated email scheduling, complete email history tracking with pagination and filtering, and full validation at both route and service layers. Email status tracking (draft, scheduled, sent, failed) with database persistence and Brevo message ID correlation for delivery tracking.
 
 # External Dependencies
 
 - **Neon Database**: Serverless PostgreSQL database hosting.
 - **OpenAI API**: Provides GPT-5 models for AI content generation.
 - **Stripe**: Handles payment processing and subscription management.
+- **Brevo API**: Transactional email service for sending, scheduling, and tracking emails.
 - **Replit Auth**: OIDC-based authentication service.
 - **Radix UI**: Foundational accessible component primitives.
 - **Tailwind CSS**: Utility-first CSS framework.

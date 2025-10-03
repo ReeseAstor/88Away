@@ -5,6 +5,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { CollaborationService } from "./collaboration";
 import { storage } from "./storage";
+import { startEmailScheduler, stopEmailScheduler } from "./emailScheduler";
 
 const app = express();
 app.use(express.json());
@@ -71,6 +72,8 @@ app.use((req, res, next) => {
     reusePort: true,
   }, () => {
     log(`serving on port ${port}`);
+    
+    startEmailScheduler();
     
     // Set up WebSocket server for collaboration on a specific path
     const wss = new WebSocketServer({ 
@@ -159,6 +162,7 @@ app.use((req, res, next) => {
     
     // Cleanup on shutdown
     process.on('SIGTERM', () => {
+      stopEmailScheduler();
       collaborationService.destroy();
       wss.close();
     });
