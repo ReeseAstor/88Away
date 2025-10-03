@@ -362,6 +362,30 @@ export const userFavoritePrompts = pgTable("user_favorite_prompts", {
   uniqueUserPrompt: unique().on(table.userId, table.promptId),
 }));
 
+// Email status enum
+export const emailStatusEnum = pgEnum('email_status', ['draft', 'scheduled', 'sent', 'failed']);
+
+// Emails table for Brevo email tracking
+export const emails = pgTable("emails", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  to: text("to").array().notNull(),
+  cc: text("cc").array(),
+  bcc: text("bcc").array(),
+  subject: text("subject").notNull(),
+  htmlContent: text("html_content").notNull(),
+  textContent: text("text_content"),
+  templateId: integer("template_id"),
+  templateParams: jsonb("template_params"),
+  scheduledAt: timestamp("scheduled_at"),
+  sentAt: timestamp("sent_at"),
+  status: emailStatusEnum("status").notNull().default('draft'),
+  brevoMessageId: varchar("brevo_message_id"),
+  error: text("error"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   ownedProjects: many(projects),
@@ -378,6 +402,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   notifications: many(notifications),
   triggeredNotifications: many(notifications),
   activities: many(activities),
+  emails: many(emails),
 }));
 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
@@ -610,6 +635,13 @@ export const activitiesRelations = relations(activities, ({ one }) => ({
   }),
 }));
 
+export const emailsRelations = relations(emails, ({ one }) => ({
+  user: one(users, {
+    fields: [emails.userId],
+    references: [users.id],
+  }),
+}));
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).pick({
   email: true,
@@ -699,6 +731,13 @@ export const insertUserFavoritePromptSchema = createInsertSchema(userFavoritePro
   createdAt: true,
 });
 
+// Email insert schema
+export const insertEmailSchema = createInsertSchema(emails).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Branching insert schemas
 export const insertDocumentBranchSchema = createInsertSchema(documentBranches).omit({
   id: true,
@@ -772,6 +811,10 @@ export type Prompt = typeof prompts.$inferSelect;
 export type InsertPrompt = z.infer<typeof insertPromptSchema>;
 export type UserFavoritePrompt = typeof userFavoritePrompts.$inferSelect;
 export type InsertUserFavoritePrompt = z.infer<typeof insertUserFavoritePromptSchema>;
+
+// Email types
+export type Email = typeof emails.$inferSelect;
+export type InsertEmail = z.infer<typeof insertEmailSchema>;
 
 // Extended types with relations
 export type ProjectWithCollaborators = Project & {
