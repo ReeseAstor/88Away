@@ -167,14 +167,10 @@ export async function listUserSms(userId: string, filters?: ListSmsFilters) {
   };
 }
 
-export async function getSmsById(smsId: number) {
+export async function getSmsById(smsId: number, userId: string) {
   const smsRecord = await db.query.sms.findFirst({
-    where: eq(sms.id, smsId),
+    where: and(eq(sms.id, smsId), eq(sms.userId, userId)),
   });
 
-  if (!smsRecord) {
-    throw new Error(`SMS with ID ${smsId} not found`);
-  }
-
-  return smsRecord;
+  return smsRecord || null;
 }
