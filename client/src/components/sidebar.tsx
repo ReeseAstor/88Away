@@ -17,7 +17,8 @@ import {
   LogOut,
   Menu,
   Plus,
-  Lightbulb
+  Lightbulb,
+  Mail
 } from "lucide-react";
 import logo from "@/assets/88away-logo-white.png";
 import logoIcon from "@/assets/88away-icon.png";
@@ -55,6 +56,12 @@ export default function Sidebar({ collapsed, onToggleCollapse, currentPath }: Si
       href: "/prompts",
       icon: Lightbulb,
       current: location === "/prompts"
+    },
+    {
+      name: "Emails",
+      href: "/emails",
+      icon: Mail,
+      current: location === "/emails"
     }
   ];
 
