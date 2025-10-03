@@ -210,16 +210,12 @@ export async function scheduleEmail(params: ScheduleEmailParams) {
   return emailRecord[0];
 }
 
-export async function getEmailStatus(emailId: string) {
+export async function getEmailStatus(emailId: string, userId: string) {
   const emailRecord = await db.query.emails.findFirst({
-    where: eq(emails.id, emailId),
+    where: and(eq(emails.id, emailId), eq(emails.userId, userId)),
   });
 
-  if (!emailRecord) {
-    throw new Error(`Email with ID ${emailId} not found`);
-  }
-
-  return emailRecord;
+  return emailRecord || null;
 }
 
 interface ListEmailsFilters {

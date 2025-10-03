@@ -3142,18 +3142,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const emailId = req.params.id;
 
-      const emailRecord = await getEmailStatus(emailId);
+      const emailRecord = await getEmailStatus(emailId, userId);
 
-      if (emailRecord.userId !== userId) {
-        return res.status(403).json({ message: "Access denied" });
+      if (!emailRecord) {
+        return res.status(404).json({ message: "Email not found" });
       }
 
       res.json(emailRecord);
     } catch (error: any) {
       console.error("Error getting email status:", error);
-      if (error.message && error.message.includes('not found')) {
-        return res.status(404).json({ message: "Email not found" });
-      }
       res.status(500).json({ message: "Failed to get email status" });
     }
   });
@@ -3302,10 +3299,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const smsId = parseInt(req.params.id);
 
-      const smsRecord = await getSmsById(smsId);
+      const smsRecord = await getSmsById(smsId, userId);
 
-      if (smsRecord.userId !== userId) {
-        return res.status(403).json({ message: "Access denied" });
+      if (!smsRecord) {
+        return res.status(404).json({ message: "SMS not found" });
       }
 
       res.json(smsRecord);
