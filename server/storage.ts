@@ -18,6 +18,7 @@ import {
   activities,
   prompts,
   userFavoritePrompts,
+  ocrRecords,
   type User,
   type UpsertUser,
   type Project,
@@ -55,6 +56,8 @@ import {
   type SearchResult,
   type Prompt,
   type UserFavoritePrompt,
+  type OCRRecord,
+  type InsertOCRRecord,
 } from "@shared/schema";
 import { calculateWordCount } from "@shared/utils";
 import { db } from "./db";
@@ -198,6 +201,18 @@ export interface IStorage {
   getUserFavoritePrompts(userId: string): Promise<Prompt[]>;
   addFavoritePrompt(userId: string, promptId: number): Promise<UserFavoritePrompt>;
   removeFavoritePrompt(userId: string, promptId: number): Promise<void>;
+
+  // OCR methods
+  createOCRRecord(data: { userId: string; projectId?: string; expertMode?: string; extractedText: string; metadata: any }): Promise<any>;
+  getOCRHistory(userId: string, projectId?: string, limit?: number): Promise<any[]>;
+  
+  // AI Usage tracking
+  getUserAIUsageCount(userId: string): Promise<number>;
+  incrementAIUsage(userId: string, projectId: string | null, type: string): Promise<void>;
+  
+  // Analysis cache
+  getAnalysisCache(key: string): Promise<any | null>;
+  setAnalysisCache(key: string, data: any): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1590,6 +1605,90 @@ export class DatabaseStorage implements IStorage {
           eq(userFavoritePrompts.promptId, promptId)
         )
       );
+  }
+
+  // OCR methods
+  async createOCRRecord(data: { userId: string; projectId?: string; expertMode?: string; extractedText: string; metadata: any }): Promise<OCRRecord> {
+    const [record] = await db.insert(ocrRecords)
+      .values({
+        userId: data.userId,
+        projectId: data.projectId || null,
+        expertMode: data.expertMode as any,
+        extractedText: data.extractedText,
+        metadata: data.metadata
+      })
+      .returning();
+    return record;
+  }
+
+  async getOCRHistory(userId: string, projectId?: string, limit: number = 50): Promise<OCRRecord[]> {
+    const conditions = [eq(ocrRecords.userId, userId)];
+    
+    if (projectId) {
+      conditions.push(eq(ocrRecords.projectId, projectId));
+    }
+
+    return db.select()
+      .from(ocrRecords)
+      .where(and(...conditions))
+      .orderBy(desc(ocrRecords.createdAt))
+      .limit(limit);
+  }
+
+  // AI Usage tracking
+  async getUserAIUsageCount(userId: string): Promise<number> {
+    // Count AI generations from this month
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const [result] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(aiGenerations)
+      .where(
+        and(
+          eq(aiGenerations.userId, userId),
+          sql`${aiGenerations.createdAt} >= ${startOfMonth.toISOString()}`
+        )
+      );
+
+    return Number(result?.count || 0);
+  }
+
+  async incrementAIUsage(userId: string, projectId: string | null, type: string): Promise<void> {
+    // Record the AI usage
+    await db.insert(aiGenerations).values({
+      userId,
+      projectId: projectId || undefined,
+      persona: type,
+      prompt: `OCR extraction - ${type}`,
+      response: 'OCR processed',
+      metadata: { type, timestamp: new Date() }
+    });
+  }
+
+  // Analysis cache (simple in-memory cache for now)
+  private analysisCache = new Map<string, { data: any; timestamp: Date }>();
+
+  async getAnalysisCache(key: string): Promise<any | null> {
+    const cached = this.analysisCache.get(key);
+    if (!cached) return null;
+    
+    // Return cached data if less than 24 hours old
+    const age = Date.now() - cached.timestamp.getTime();
+    if (age > 86400000) {
+      this.analysisCache.delete(key);
+      return null;
+    }
+    
+    return cached;
+  }
+
+  async setAnalysisCache(key: string, data: any): Promise<void> {
+    this.analysisCache.set(key, {
+      data,
+      timestamp: new Date()
+    });
   }
 }
 

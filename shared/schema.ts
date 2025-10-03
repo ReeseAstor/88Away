@@ -404,6 +404,20 @@ export const sms = pgTable("sms", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Expert mode enum
+export const expertModeEnum = pgEnum('expert_mode', ['academic', 'finance', 'law', 'marketing']);
+
+// OCR records table for tracking OCR extractions
+export const ocrRecords = pgTable("ocr_records", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  projectId: varchar("project_id").references(() => projects.id, { onDelete: 'cascade' }),
+  expertMode: expertModeEnum("expert_mode"),
+  extractedText: text("extracted_text").notNull(),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   ownedProjects: many(projects),
@@ -422,6 +436,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   activities: many(activities),
   emails: many(emails),
   sms: many(sms),
+  ocrRecords: many(ocrRecords),
 }));
 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
@@ -440,6 +455,7 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   collaborationPresence: many(collaborationPresence),
   notifications: many(notifications),
   activities: many(activities),
+  ocrRecords: many(ocrRecords),
 }));
 
 export const projectCollaboratorsRelations = relations(projectCollaborators, ({ one }) => ({
@@ -668,6 +684,17 @@ export const smsRelations = relations(sms, ({ one }) => ({
   }),
 }));
 
+export const ocrRecordsRelations = relations(ocrRecords, ({ one }) => ({
+  user: one(users, {
+    fields: [ocrRecords.userId],
+    references: [users.id],
+  }),
+  project: one(projects, {
+    fields: [ocrRecords.projectId],
+    references: [projects.id],
+  }),
+}));
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).pick({
   email: true,
@@ -771,6 +798,12 @@ export const insertSmsSchema = createInsertSchema(sms).omit({
   updatedAt: true,
 });
 
+// OCR insert schema
+export const insertOCRRecordSchema = createInsertSchema(ocrRecords).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Branching insert schemas
 export const insertDocumentBranchSchema = createInsertSchema(documentBranches).omit({
   id: true,
@@ -852,6 +885,10 @@ export type InsertEmail = z.infer<typeof insertEmailSchema>;
 // SMS types
 export type Sms = typeof sms.$inferSelect;
 export type InsertSms = z.infer<typeof insertSmsSchema>;
+
+// OCR types
+export type OCRRecord = typeof ocrRecords.$inferSelect;
+export type InsertOCRRecord = z.infer<typeof insertOCRRecordSchema>;
 
 // Extended types with relations
 export type ProjectWithCollaborators = Project & {
