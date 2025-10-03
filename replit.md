@@ -45,6 +45,7 @@ Preferred communication style: Simple, everyday language.
 - **Notifications System**: Real-time, collaborative notifications for project activities, with recipient-specific delivery and read status tracking.
 - **Activity Feed**: Comprehensive project activity logging visible to all collaborators, distinct from personal notifications.
 - **Global Search**: Multi-table search functionality across documents, characters, worldbuilding, and timeline events with relevance ranking and access control.
+- **Prompt Library**: Professional writing prompt library with 1008+ curated prompts across 10 categories (Character Development, Plot & Story Structure, Dialogue, Scene Writing, Worldbuilding, Editing, Genre-Specific, Ghostwriting, Marketing, Publishing Prep). Features search with debouncing, multi-dimensional filtering (category, persona, role, featured), favorites system, usage tracking, and one-click AI integration via Zustand store that pre-fills AI modal with prompt content and appropriate persona.
 
 # External Dependencies
 
