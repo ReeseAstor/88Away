@@ -18,7 +18,8 @@ import {
   Menu,
   Plus,
   Lightbulb,
-  Mail
+  Mail,
+  MessageSquare
 } from "lucide-react";
 import logo from "@/assets/88away-logo-white.png";
 import logoIcon from "@/assets/88away-icon.png";
@@ -62,6 +63,12 @@ export default function Sidebar({ collapsed, onToggleCollapse, currentPath }: Si
       href: "/emails",
       icon: Mail,
       current: location === "/emails"
+    },
+    {
+      name: "SMS",
+      href: "/sms",
+      icon: MessageSquare,
+      current: location === "/sms"
     }
   ];
 
