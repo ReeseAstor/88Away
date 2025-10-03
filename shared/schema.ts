@@ -272,12 +272,12 @@ export const notifications = pgTable("notifications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
   type: varchar("type").notNull(),
-  title: text("title").notNull(),
+  title: varchar("title").notNull(),
   message: text("message").notNull(),
-  projectId: varchar("project_id").references(() => projects.id, { onDelete: 'cascade' }),
-  resourceId: varchar("resource_id"),
-  resourceType: varchar("resource_type"),
-  actorId: varchar("actor_id").references(() => users.id, { onDelete: 'cascade' }),
+  relatedProjectId: varchar("related_project_id").references(() => projects.id, { onDelete: 'cascade' }),
+  relatedId: varchar("related_id"),
+  relatedType: varchar("related_type"),
+  actionUrl: varchar("action_url"),
   isRead: boolean("is_read").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
@@ -510,12 +510,8 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
     references: [users.id],
   }),
   project: one(projects, {
-    fields: [notifications.projectId],
+    fields: [notifications.relatedProjectId],
     references: [projects.id],
-  }),
-  actor: one(users, {
-    fields: [notifications.actorId],
-    references: [users.id],
   }),
 }));
 
