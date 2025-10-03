@@ -2854,6 +2854,114 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Prompt Library routes
+  app.get("/api/prompts", async (req, res) => {
+    try {
+      const prompts = await storage.getAllPrompts();
+      res.json(prompts);
+    } catch (error) {
+      console.error("Error fetching prompts:", error);
+      res.status(500).json({ error: "Failed to fetch prompts" });
+    }
+  });
+
+  app.get("/api/prompts/category/:category", async (req, res) => {
+    try {
+      const { category } = req.params;
+      const prompts = await storage.getPromptsByCategory(category);
+      res.json(prompts);
+    } catch (error) {
+      console.error("Error fetching prompts by category:", error);
+      res.status(500).json({ error: "Failed to fetch prompts by category" });
+    }
+  });
+
+  app.get("/api/prompts/persona/:persona", async (req, res) => {
+    try {
+      const { persona } = req.params;
+      const prompts = await storage.getPromptsByPersona(persona);
+      res.json(prompts);
+    } catch (error) {
+      console.error("Error fetching prompts by persona:", error);
+      res.status(500).json({ error: "Failed to fetch prompts by persona" });
+    }
+  });
+
+  app.get("/api/prompts/featured", async (req, res) => {
+    try {
+      const prompts = await storage.getFeaturedPrompts();
+      res.json(prompts);
+    } catch (error) {
+      console.error("Error fetching featured prompts:", error);
+      res.status(500).json({ error: "Failed to fetch featured prompts" });
+    }
+  });
+
+  app.get("/api/prompts/search", async (req, res) => {
+    try {
+      const query = req.query.q as string;
+      
+      if (!query || query.trim().length < 2) {
+        return res.status(400).json({ error: "Search query must be at least 2 characters" });
+      }
+      
+      const prompts = await storage.searchPrompts(query.trim());
+      res.json(prompts);
+    } catch (error) {
+      console.error("Error searching prompts:", error);
+      res.status(500).json({ error: "Failed to search prompts" });
+    }
+  });
+
+  app.post("/api/prompts/:id/use", isAuthenticated, async (req: any, res) => {
+    try {
+      const promptId = parseInt(req.params.id);
+      await storage.incrementPromptUsage(promptId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error incrementing prompt usage:", error);
+      res.status(500).json({ error: "Failed to track prompt usage" });
+    }
+  });
+
+  app.get("/api/user/favorite-prompts", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const prompts = await storage.getUserFavoritePrompts(userId);
+      res.json(prompts);
+    } catch (error) {
+      console.error("Error fetching favorite prompts:", error);
+      res.status(500).json({ error: "Failed to fetch favorite prompts" });
+    }
+  });
+
+  app.post("/api/user/favorite-prompts/:promptId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const promptId = parseInt(req.params.promptId);
+      const favorite = await storage.addFavoritePrompt(userId, promptId);
+      res.json(favorite);
+    } catch (error: any) {
+      console.error("Error adding favorite prompt:", error);
+      if (error.code === '23505') {
+        return res.status(400).json({ error: "Prompt already in favorites" });
+      }
+      res.status(500).json({ error: "Failed to add favorite prompt" });
+    }
+  });
+
+  app.delete("/api/user/favorite-prompts/:promptId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const promptId = parseInt(req.params.promptId);
+      await storage.removeFavoritePrompt(userId, promptId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error removing favorite prompt:", error);
+      res.status(500).json({ error: "Failed to remove favorite prompt" });
+    }
+  });
+
   // Stripe subscription routes
   app.get('/api/get-or-create-subscription', isAuthenticated, async (req: any, res) => {
     const user = req.user;

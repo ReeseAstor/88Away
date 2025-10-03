@@ -16,6 +16,8 @@ import {
   collaborationPresence,
   notifications,
   activities,
+  prompts,
+  userFavoritePrompts,
   type User,
   type UpsertUser,
   type Project,
@@ -51,6 +53,8 @@ import {
   type Activity,
   type InsertActivity,
   type SearchResult,
+  type Prompt,
+  type UserFavoritePrompt,
 } from "@shared/schema";
 import { calculateWordCount } from "@shared/utils";
 import { db } from "./db";
@@ -181,6 +185,19 @@ export interface IStorage {
 
   // Search
   searchContent(userId: string, query: string, limit?: number): Promise<SearchResult[]>;
+
+  // Prompt methods
+  getAllPrompts(): Promise<Prompt[]>;
+  getPromptsByCategory(category: string): Promise<Prompt[]>;
+  getPromptsByPersona(persona: string): Promise<Prompt[]>;
+  getFeaturedPrompts(): Promise<Prompt[]>;
+  searchPrompts(query: string): Promise<Prompt[]>;
+  incrementPromptUsage(promptId: number): Promise<void>;
+
+  // User favorites methods
+  getUserFavoritePrompts(userId: string): Promise<Prompt[]>;
+  addFavoritePrompt(userId: string, promptId: number): Promise<UserFavoritePrompt>;
+  removeFavoritePrompt(userId: string, promptId: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1507,6 +1524,72 @@ export class DatabaseStorage implements IStorage {
     });
 
     return allResults.slice(0, limit);
+  }
+
+  // Prompt methods
+  async getAllPrompts(): Promise<Prompt[]> {
+    return db.select().from(prompts).orderBy(prompts.category, prompts.title);
+  }
+
+  async getPromptsByCategory(category: string): Promise<Prompt[]> {
+    return db.select().from(prompts).where(eq(prompts.category, category)).orderBy(prompts.title);
+  }
+
+  async getPromptsByPersona(persona: string): Promise<Prompt[]> {
+    return db.select().from(prompts).where(
+      or(eq(prompts.persona, persona), eq(prompts.persona, "any"))
+    ).orderBy(prompts.category, prompts.title);
+  }
+
+  async getFeaturedPrompts(): Promise<Prompt[]> {
+    return db.select().from(prompts).where(eq(prompts.isFeatured, true)).orderBy(desc(prompts.usageCount));
+  }
+
+  async searchPrompts(query: string): Promise<Prompt[]> {
+    const searchPattern = `%${query.toLowerCase()}%`;
+    return db.select().from(prompts).where(
+      or(
+        sql`LOWER(${prompts.title}) LIKE ${searchPattern}`,
+        sql`LOWER(${prompts.content}) LIKE ${searchPattern}`,
+        sql`LOWER(${prompts.category}) LIKE ${searchPattern}`,
+        sql`LOWER(${prompts.subcategory}) LIKE ${searchPattern}`
+      )
+    ).orderBy(prompts.category, prompts.title);
+  }
+
+  async incrementPromptUsage(promptId: number): Promise<void> {
+    await db.update(prompts)
+      .set({ usageCount: sql`${prompts.usageCount} + 1` })
+      .where(eq(prompts.id, promptId));
+  }
+
+  // User favorites methods
+  async getUserFavoritePrompts(userId: string): Promise<Prompt[]> {
+    const favorites = await db
+      .select({ prompt: prompts })
+      .from(userFavoritePrompts)
+      .innerJoin(prompts, eq(userFavoritePrompts.promptId, prompts.id))
+      .where(eq(userFavoritePrompts.userId, userId))
+      .orderBy(prompts.category, prompts.title);
+    
+    return favorites.map(f => f.prompt);
+  }
+
+  async addFavoritePrompt(userId: string, promptId: number): Promise<UserFavoritePrompt> {
+    const [favorite] = await db.insert(userFavoritePrompts)
+      .values({ userId, promptId })
+      .returning();
+    return favorite;
+  }
+
+  async removeFavoritePrompt(userId: string, promptId: number): Promise<void> {
+    await db.delete(userFavoritePrompts)
+      .where(
+        and(
+          eq(userFavoritePrompts.userId, userId),
+          eq(userFavoritePrompts.promptId, promptId)
+        )
+      );
   }
 }
 

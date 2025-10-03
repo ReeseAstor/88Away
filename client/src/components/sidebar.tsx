@@ -16,7 +16,8 @@ import {
   CreditCard,
   LogOut,
   Menu,
-  Plus
+  Plus,
+  Lightbulb
 } from "lucide-react";
 import logo from "@/assets/88away-logo-white.png";
 import logoIcon from "@/assets/88away-icon.png";
@@ -48,6 +49,12 @@ export default function Sidebar({ collapsed, onToggleCollapse, currentPath }: Si
       href: "/",
       icon: LayoutDashboard,
       current: location === "/"
+    },
+    {
+      name: "Prompt Library",
+      href: "/prompts",
+      icon: Lightbulb,
+      current: location === "/prompts"
     }
   ];
 
