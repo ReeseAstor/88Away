@@ -2835,6 +2835,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Search route
+  app.get('/api/search', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const query = req.query.q as string;
+      const limit = parseInt(req.query.limit as string) || 20;
+
+      if (!query || query.trim().length < 2) {
+        return res.status(400).json({ error: "Search query must be at least 2 characters" });
+      }
+
+      const results = await storage.searchContent(userId, query.trim(), limit);
+      res.json(results);
+    } catch (error) {
+      console.error("Search error:", error);
+      res.status(500).json({ error: "Failed to search content" });
+    }
+  });
+
   // Stripe subscription routes
   app.get('/api/get-or-create-subscription', isAuthenticated, async (req: any, res) => {
     const user = req.user;

@@ -50,10 +50,11 @@ import {
   type OnboardingProgress,
   type Activity,
   type InsertActivity,
+  type SearchResult,
 } from "@shared/schema";
 import { calculateWordCount } from "@shared/utils";
 import { db } from "./db";
-import { eq, and, desc, asc, lt, sql } from "drizzle-orm";
+import { eq, and, desc, asc, lt, sql, or, inArray } from "drizzle-orm";
 
 export interface IStorage {
   // Session operations
@@ -177,6 +178,9 @@ export interface IStorage {
   // Activities
   getProjectActivities(projectId: string, limit?: number): Promise<Activity[]>;
   createActivity(activity: InsertActivity): Promise<Activity>;
+
+  // Search
+  searchContent(userId: string, query: string, limit?: number): Promise<SearchResult[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1361,6 +1365,148 @@ export class DatabaseStorage implements IStorage {
       .values(activity)
       .returning();
     return created;
+  }
+
+  async searchContent(userId: string, query: string, limit: number = 20): Promise<SearchResult[]> {
+    const projectIds = await db
+      .select({ id: projects.id })
+      .from(projects)
+      .leftJoin(projectCollaborators, eq(projects.id, projectCollaborators.projectId))
+      .where(
+        or(
+          eq(projects.ownerId, userId),
+          and(
+            eq(projectCollaborators.userId, userId),
+            inArray(projectCollaborators.role, ["editor", "reviewer", "reader"])
+          )
+        )
+      );
+
+    const userProjectIds = projectIds.map(p => p.id);
+
+    if (userProjectIds.length === 0) {
+      return [];
+    }
+
+    const searchPattern = `%${query.toLowerCase()}%`;
+
+    const documentResults = await db
+      .select({
+        id: documents.id,
+        title: documents.title,
+        content: documents.content,
+        projectId: documents.projectId,
+        projectTitle: projects.title,
+        type: sql<string>`'document'`,
+        createdAt: documents.createdAt,
+      })
+      .from(documents)
+      .innerJoin(projects, eq(documents.projectId, projects.id))
+      .where(
+        and(
+          inArray(documents.projectId, userProjectIds),
+          or(
+            sql`LOWER(${documents.title}) LIKE ${searchPattern}`,
+            sql`LOWER(${documents.content}) LIKE ${searchPattern}`
+          )
+        )
+      )
+      .limit(limit);
+
+    const characterResults = await db
+      .select({
+        id: characters.id,
+        title: characters.name,
+        content: sql<string>`COALESCE(${characters.description}, '') || ' ' || COALESCE(${characters.notes}, '')`,
+        projectId: characters.projectId,
+        projectTitle: projects.title,
+        type: sql<string>`'character'`,
+        createdAt: characters.createdAt,
+      })
+      .from(characters)
+      .innerJoin(projects, eq(characters.projectId, projects.id))
+      .where(
+        and(
+          inArray(characters.projectId, userProjectIds),
+          or(
+            sql`LOWER(${characters.name}) LIKE ${searchPattern}`,
+            sql`LOWER(${characters.description}) LIKE ${searchPattern}`,
+            sql`LOWER(${characters.notes}) LIKE ${searchPattern}`
+          )
+        )
+      )
+      .limit(limit);
+
+    const worldbuildingResults = await db
+      .select({
+        id: worldbuildingEntries.id,
+        title: worldbuildingEntries.title,
+        content: worldbuildingEntries.description,
+        projectId: worldbuildingEntries.projectId,
+        projectTitle: projects.title,
+        type: sql<string>`'worldbuilding'`,
+        createdAt: worldbuildingEntries.createdAt,
+      })
+      .from(worldbuildingEntries)
+      .innerJoin(projects, eq(worldbuildingEntries.projectId, projects.id))
+      .where(
+        and(
+          inArray(worldbuildingEntries.projectId, userProjectIds),
+          or(
+            sql`LOWER(${worldbuildingEntries.title}) LIKE ${searchPattern}`,
+            sql`LOWER(${worldbuildingEntries.description}) LIKE ${searchPattern}`
+          )
+        )
+      )
+      .limit(limit);
+
+    const timelineResults = await db
+      .select({
+        id: timelineEvents.id,
+        title: timelineEvents.title,
+        content: timelineEvents.description,
+        projectId: timelineEvents.projectId,
+        projectTitle: projects.title,
+        type: sql<string>`'timeline'`,
+        createdAt: timelineEvents.createdAt,
+      })
+      .from(timelineEvents)
+      .innerJoin(projects, eq(timelineEvents.projectId, projects.id))
+      .where(
+        and(
+          inArray(timelineEvents.projectId, userProjectIds),
+          or(
+            sql`LOWER(${timelineEvents.title}) LIKE ${searchPattern}`,
+            sql`LOWER(${timelineEvents.description}) LIKE ${searchPattern}`
+          )
+        )
+      )
+      .limit(limit);
+
+    const allResults = [
+      ...documentResults,
+      ...characterResults,
+      ...worldbuildingResults,
+      ...timelineResults,
+    ];
+
+    allResults.sort((a, b) => {
+      const aTitle = a.title.toLowerCase();
+      const bTitle = b.title.toLowerCase();
+      const queryLower = query.toLowerCase();
+
+      const aExact = aTitle === queryLower ? 1 : 0;
+      const bExact = bTitle === queryLower ? 1 : 0;
+      if (aExact !== bExact) return bExact - aExact;
+
+      const aTitleMatch = aTitle.includes(queryLower) ? 1 : 0;
+      const bTitleMatch = bTitle.includes(queryLower) ? 1 : 0;
+      if (aTitleMatch !== bTitleMatch) return bTitleMatch - aTitleMatch;
+
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+
+    return allResults.slice(0, limit);
   }
 }
 

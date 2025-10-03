@@ -21,6 +21,7 @@ import {
 import logo from "@/assets/88away-logo-white.png";
 import logoIcon from "@/assets/88away-icon.png";
 import { NotificationBell } from "./notification-bell";
+import { SearchBar } from "./search-bar";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -160,6 +161,13 @@ export default function Sidebar({ collapsed, onToggleCollapse, currentPath }: Si
           </Button>
         </div>
       </div>
+
+      {/* Search Bar */}
+      {!collapsed && (
+        <div className="p-4 border-b border-secondary/20">
+          <SearchBar />
+        </div>
+      )}
 
       {/* User Profile */}
       <div className="p-4 border-b border-secondary/20">
