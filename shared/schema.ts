@@ -255,6 +255,25 @@ export const documentComments = pgTable("document_comments", {
 // Collaboration presence status enum
 export const presenceStatusEnum = pgEnum('presence_status', ['online', 'offline', 'away']);
 
+// Notification type enum
+export const notificationTypeEnum = pgEnum('notification_type', [
+  'document_created',
+  'document_updated',
+  'document_deleted',
+  'character_created',
+  'character_updated',
+  'character_deleted',
+  'worldbuilding_created',
+  'worldbuilding_updated',
+  'worldbuilding_deleted',
+  'timeline_created',
+  'timeline_updated',
+  'timeline_deleted',
+  'collaborator_added',
+  'collaborator_removed',
+  'comment_added'
+]);
+
 // Collaboration presence for real-time user tracking
 export const collaborationPresence = pgTable("collaboration_presence", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -267,22 +286,20 @@ export const collaborationPresence = pgTable("collaboration_presence", {
   lastSeen: timestamp("last_seen").defaultNow(),
 });
 
-// Notifications for collaborative alerts
+// Notifications table
 export const notifications = pgTable("notifications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
-  type: varchar("type").notNull(),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  type: notificationTypeEnum("type").notNull(),
   title: varchar("title").notNull(),
   message: text("message").notNull(),
-  relatedProjectId: varchar("related_project_id").references(() => projects.id, { onDelete: 'cascade' }),
-  relatedId: varchar("related_id"),
-  relatedType: varchar("related_type"),
-  actionUrl: varchar("action_url"),
+  entityType: varchar("entity_type"),
+  entityId: varchar("entity_id"),
+  actorId: varchar("actor_id").references(() => users.id, { onDelete: 'cascade' }),
   isRead: boolean("is_read").default(false),
   createdAt: timestamp("created_at").defaultNow(),
-}, (table) => [
-  index("idx_notifications_user_created").on(table.userId, table.createdAt),
-]);
+});
 
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
@@ -510,8 +527,12 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
     references: [users.id],
   }),
   project: one(projects, {
-    fields: [notifications.relatedProjectId],
+    fields: [notifications.projectId],
     references: [projects.id],
+  }),
+  actor: one(users, {
+    fields: [notifications.actorId],
+    references: [users.id],
   }),
 }));
 
