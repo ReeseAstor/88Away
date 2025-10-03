@@ -33,12 +33,21 @@ import {
   insertDocumentBranchSchema,
   insertDocumentVersionSchema,
   insertBranchMergeEventSchema,
+  insertEmailSchema,
 } from "@shared/schema";
 import { z } from "zod";
+import { fromZodError } from "zod-validation-error";
 import * as Y from 'yjs';
 import { CollaborationService } from "./collaboration";
 import { notifyProjectCollaborators } from "./notifications";
 import { logActivity, getUserDisplayName } from "./activities";
+import { 
+  sendEmail, 
+  sendBatchEmails, 
+  scheduleEmail, 
+  getEmailStatus, 
+  listUserEmails 
+} from "./brevoService";
 
 let stripe: Stripe | null = null;
 
@@ -2959,6 +2968,225 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error removing favorite prompt:", error);
       res.status(500).json({ error: "Failed to remove favorite prompt" });
+    }
+  });
+
+  // Email routes
+  app.post('/api/emails/send', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      const validationResult = insertEmailSchema.safeParse({
+        ...req.body,
+        userId,
+      });
+
+      if (!validationResult.success) {
+        const validationError = fromZodError(validationResult.error);
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          error: validationError.message,
+          details: validationResult.error.errors 
+        });
+      }
+
+      const { data } = validationResult;
+      const emailRecord = await sendEmail({
+        userId: data.userId,
+        to: data.to,
+        subject: data.subject,
+        htmlContent: data.htmlContent,
+        textContent: data.textContent || undefined,
+        cc: data.cc || undefined,
+        bcc: data.bcc || undefined,
+        templateId: data.templateId || undefined,
+        templateParams: (data.templateParams && typeof data.templateParams === 'object' && !Array.isArray(data.templateParams)) 
+          ? data.templateParams as Record<string, any>
+          : undefined,
+      });
+
+      res.json(emailRecord);
+    } catch (error) {
+      console.error("Error sending email:", error);
+      res.status(500).json({ message: "Failed to send email" });
+    }
+  });
+
+  app.post('/api/emails/batch', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { emails: emailList } = req.body;
+
+      if (!Array.isArray(emailList)) {
+        return res.status(400).json({ message: "emails must be an array" });
+      }
+
+      const validatedEmails = [];
+      const validationErrors = [];
+
+      for (let i = 0; i < emailList.length; i++) {
+        const validationResult = insertEmailSchema.safeParse({
+          ...emailList[i],
+          userId,
+        });
+
+        if (!validationResult.success) {
+          const validationError = fromZodError(validationResult.error);
+          validationErrors.push({
+            index: i,
+            message: validationError.message,
+            details: validationResult.error.errors,
+          });
+        } else {
+          validatedEmails.push(validationResult.data);
+        }
+      }
+
+      if (validationErrors.length > 0) {
+        return res.status(400).json({
+          message: "Validation failed for one or more emails",
+          errors: validationErrors,
+        });
+      }
+
+      const cleanedEmails = validatedEmails.map(data => ({
+        to: data.to,
+        subject: data.subject,
+        htmlContent: data.htmlContent,
+        textContent: data.textContent || undefined,
+        cc: data.cc || undefined,
+        bcc: data.bcc || undefined,
+        templateId: data.templateId || undefined,
+        templateParams: (data.templateParams && typeof data.templateParams === 'object' && !Array.isArray(data.templateParams))
+          ? data.templateParams as Record<string, any>
+          : undefined,
+      }));
+
+      const results = await sendBatchEmails({
+        userId,
+        emails: cleanedEmails,
+      });
+
+      res.json(results);
+    } catch (error) {
+      console.error("Error sending batch emails:", error);
+      res.status(500).json({ message: "Failed to send batch emails" });
+    }
+  });
+
+  app.post('/api/emails/schedule', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      if (!req.body.scheduledAt) {
+        return res.status(400).json({ 
+          message: "scheduledAt is required for scheduling emails" 
+        });
+      }
+
+      const scheduledAtDate = new Date(req.body.scheduledAt);
+      if (isNaN(scheduledAtDate.getTime())) {
+        return res.status(400).json({ 
+          message: "scheduledAt must be a valid date" 
+        });
+      }
+
+      const validationResult = insertEmailSchema.safeParse({
+        ...req.body,
+        userId,
+        scheduledAt: scheduledAtDate,
+      });
+
+      if (!validationResult.success) {
+        const validationError = fromZodError(validationResult.error);
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          error: validationError.message,
+          details: validationResult.error.errors 
+        });
+      }
+
+      const { data } = validationResult;
+      const emailRecord = await scheduleEmail({
+        userId: data.userId,
+        to: data.to,
+        subject: data.subject,
+        htmlContent: data.htmlContent,
+        textContent: data.textContent || undefined,
+        cc: data.cc || undefined,
+        bcc: data.bcc || undefined,
+        templateId: data.templateId || undefined,
+        templateParams: (data.templateParams && typeof data.templateParams === 'object' && !Array.isArray(data.templateParams))
+          ? data.templateParams as Record<string, any>
+          : undefined,
+        scheduledAt: scheduledAtDate,
+      });
+
+      res.json(emailRecord);
+    } catch (error) {
+      console.error("Error scheduling email:", error);
+      res.status(500).json({ message: "Failed to schedule email" });
+    }
+  });
+
+  app.get('/api/emails/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const emailId = req.params.id;
+
+      const emailRecord = await getEmailStatus(emailId);
+
+      if (emailRecord.userId !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      res.json(emailRecord);
+    } catch (error: any) {
+      console.error("Error getting email status:", error);
+      if (error.message && error.message.includes('not found')) {
+        return res.status(404).json({ message: "Email not found" });
+      }
+      res.status(500).json({ message: "Failed to get email status" });
+    }
+  });
+
+  app.get('/api/emails', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { status, startDate, endDate, page, limit } = req.query;
+
+      const filters: any = {};
+
+      if (status) {
+        filters.status = status as 'draft' | 'scheduled' | 'sent' | 'failed';
+      }
+
+      if (startDate || endDate) {
+        filters.dateRange = {};
+        if (startDate) {
+          filters.dateRange.from = new Date(startDate as string);
+        }
+        if (endDate) {
+          filters.dateRange.to = new Date(endDate as string);
+        }
+      }
+
+      if (limit) {
+        filters.limit = parseInt(limit as string);
+      }
+
+      if (page) {
+        const pageNum = parseInt(page as string);
+        const pageSize = filters.limit || 50;
+        filters.offset = (pageNum - 1) * pageSize;
+      }
+
+      const result = await listUserEmails(userId, filters);
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error listing emails:", error);
+      res.status(500).json({ message: "Failed to list emails" });
     }
   });
 
