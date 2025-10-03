@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import logo from "@/assets/88away-logo-white.png";
 import logoIcon from "@/assets/88away-icon.png";
+import { NotificationBell } from "./notification-bell";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -278,6 +279,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, currentPath }: Si
 
       {/* Sidebar Footer */}
       <div className="p-4 border-t border-secondary/20 space-y-2">
+        <NotificationBell collapsed={collapsed} />
         <Link href="/settings">
           <div className="flex items-center px-3 py-2 hover:bg-secondary/20 rounded-lg transition-colors">
             <Settings className="h-4 w-4" />

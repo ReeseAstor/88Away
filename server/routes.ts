@@ -37,6 +37,7 @@ import {
 import { z } from "zod";
 import * as Y from 'yjs';
 import { CollaborationService } from "./collaboration";
+import { notifyProjectCollaborators } from "./notifications";
 
 let stripe: Stripe | null = null;
 
@@ -263,6 +264,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       const character = await storage.createCharacter(validatedData);
+      
+      // Notify collaborators about new character
+      try {
+        const user = await storage.getUser(userId);
+        const displayName = user?.firstName || user?.email || 'A user';
+        await notifyProjectCollaborators(storage, character.projectId, userId, {
+          type: "character_created",
+          title: "New Character Added",
+          message: `${displayName} added character "${character.name}"`,
+          entityType: "character",
+          entityId: character.id,
+          actorId: userId,
+        });
+      } catch (error) {
+        console.error("Failed to create notifications:", error);
+      }
+      
       res.json(character);
     } catch (error) {
       console.error("Error creating character:", error);
@@ -292,6 +310,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const validatedData = insertCharacterSchema.partial().parse(req.body);
       const updated = await storage.updateCharacter(req.params.id, validatedData);
+      
+      // Notify collaborators about character update
+      try {
+        const user = await storage.getUser(userId);
+        const displayName = user?.firstName || user?.email || 'A user';
+        await notifyProjectCollaborators(storage, character.projectId, userId, {
+          type: "character_updated",
+          title: "Character Updated",
+          message: `${displayName} updated character "${updated.name}"`,
+          entityType: "character",
+          entityId: updated.id,
+          actorId: userId,
+        });
+      } catch (error) {
+        console.error("Failed to create notifications:", error);
+      }
+      
       res.json(updated);
     } catch (error) {
       console.error("Error updating character:", error);
@@ -319,7 +354,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Insufficient permissions" });
       }
 
+      const characterName = character.name;
       await storage.deleteCharacter(req.params.id);
+      
+      // Notify collaborators about character deletion
+      try {
+        const user = await storage.getUser(userId);
+        const displayName = user?.firstName || user?.email || 'A user';
+        await notifyProjectCollaborators(storage, character.projectId, userId, {
+          type: "character_deleted",
+          title: "Character Deleted",
+          message: `${displayName} deleted character "${characterName}"`,
+          entityType: "character",
+          entityId: req.params.id,
+          actorId: userId,
+        });
+      } catch (error) {
+        console.error("Failed to create notifications:", error);
+      }
+      
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting character:", error);
@@ -379,6 +432,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       const entry = await storage.createWorldbuildingEntry(validatedData);
+      
+      // Notify collaborators about new worldbuilding entry
+      try {
+        const user = await storage.getUser(userId);
+        const displayName = user?.firstName || user?.email || 'A user';
+        await notifyProjectCollaborators(storage, entry.projectId, userId, {
+          type: "worldbuilding_created",
+          title: "New Worldbuilding Entry",
+          message: `${displayName} added "${entry.title}"`,
+          entityType: "worldbuilding",
+          entityId: entry.id,
+          actorId: userId,
+        });
+      } catch (error) {
+        console.error("Failed to create notifications:", error);
+      }
+      
       res.json(entry);
     } catch (error) {
       console.error("Error creating worldbuilding entry:", error);
@@ -419,6 +489,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const updated = await storage.updateWorldbuildingEntry(req.params.id, validatedData);
+      
+      // Notify collaborators about worldbuilding update
+      try {
+        const user = await storage.getUser(userId);
+        const displayName = user?.firstName || user?.email || 'A user';
+        await notifyProjectCollaborators(storage, entry.projectId, userId, {
+          type: "worldbuilding_updated",
+          title: "Worldbuilding Entry Updated",
+          message: `${displayName} updated "${updated.title}"`,
+          entityType: "worldbuilding",
+          entityId: updated.id,
+          actorId: userId,
+        });
+      } catch (error) {
+        console.error("Failed to create notifications:", error);
+      }
+      
       res.json(updated);
     } catch (error) {
       console.error("Error updating worldbuilding entry:", error);
@@ -446,7 +533,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Insufficient permissions" });
       }
 
+      const entryTitle = entry.title;
       await storage.deleteWorldbuildingEntry(req.params.id);
+      
+      // Notify collaborators about worldbuilding deletion
+      try {
+        const user = await storage.getUser(userId);
+        const displayName = user?.firstName || user?.email || 'A user';
+        await notifyProjectCollaborators(storage, entry.projectId, userId, {
+          type: "worldbuilding_deleted",
+          title: "Worldbuilding Entry Deleted",
+          message: `${displayName} deleted "${entryTitle}"`,
+          entityType: "worldbuilding",
+          entityId: req.params.id,
+          actorId: userId,
+        });
+      } catch (error) {
+        console.error("Failed to create notifications:", error);
+      }
+      
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting worldbuilding entry:", error);
@@ -500,6 +605,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       const event = await storage.createTimelineEvent(validatedData);
+      
+      // Notify collaborators about new timeline event
+      try {
+        const user = await storage.getUser(userId);
+        const displayName = user?.firstName || user?.email || 'A user';
+        await notifyProjectCollaborators(storage, event.projectId, userId, {
+          type: "timeline_created",
+          title: "New Timeline Event",
+          message: `${displayName} added "${event.title}"`,
+          entityType: "timeline",
+          entityId: event.id,
+          actorId: userId,
+        });
+      } catch (error) {
+        console.error("Failed to create notifications:", error);
+      }
+      
       res.json(event);
     } catch (error) {
       console.error("Error creating timeline event:", error);
@@ -546,6 +668,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const updated = await storage.updateTimelineEvent(req.params.id, validatedData);
+      
+      // Notify collaborators about timeline event update
+      try {
+        const user = await storage.getUser(userId);
+        const displayName = user?.firstName || user?.email || 'A user';
+        await notifyProjectCollaborators(storage, event.projectId, userId, {
+          type: "timeline_updated",
+          title: "Timeline Event Updated",
+          message: `${displayName} updated "${updated.title}"`,
+          entityType: "timeline",
+          entityId: updated.id,
+          actorId: userId,
+        });
+      } catch (error) {
+        console.error("Failed to create notifications:", error);
+      }
+      
       res.json(updated);
     } catch (error) {
       console.error("Error updating timeline event:", error);
@@ -573,7 +712,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Insufficient permissions" });
       }
 
+      const eventTitle = event.title;
       await storage.deleteTimelineEvent(req.params.id);
+      
+      // Notify collaborators about timeline event deletion
+      try {
+        const user = await storage.getUser(userId);
+        const displayName = user?.firstName || user?.email || 'A user';
+        await notifyProjectCollaborators(storage, event.projectId, userId, {
+          type: "timeline_deleted",
+          title: "Timeline Event Deleted",
+          message: `${displayName} deleted "${eventTitle}"`,
+          entityType: "timeline",
+          entityId: req.params.id,
+          actorId: userId,
+        });
+      } catch (error) {
+        console.error("Failed to create notifications:", error);
+      }
+      
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting timeline event:", error);
@@ -698,6 +855,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...validatedData,
         authorId: userId
       });
+      
+      // Notify collaborators about new document
+      try {
+        const user = await storage.getUser(userId);
+        const displayName = user?.firstName || user?.email || 'A user';
+        await notifyProjectCollaborators(storage, document.projectId, userId, {
+          type: "document_created",
+          title: "New Document Created",
+          message: `${displayName} created a new document "${document.title}"`,
+          entityType: "document",
+          entityId: document.id,
+          actorId: userId,
+        });
+      } catch (error) {
+        console.error("Failed to create notifications:", error);
+      }
+      
       res.json(document);
     } catch (error) {
       console.error("Error creating document:", error);
@@ -732,6 +906,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const allDocuments = await storage.getProjectDocuments(document.projectId);
       const totalWordCount = allDocuments.reduce((sum, doc) => sum + (doc.wordCount || 0), 0);
       await storage.updateProject(document.projectId, { currentWordCount: totalWordCount });
+      
+      // Notify collaborators about document update
+      try {
+        const user = await storage.getUser(userId);
+        const displayName = user?.firstName || user?.email || 'A user';
+        await notifyProjectCollaborators(storage, document.projectId, userId, {
+          type: "document_updated",
+          title: "Document Updated",
+          message: `${displayName} updated "${updated.title}"`,
+          entityType: "document",
+          entityId: updated.id,
+          actorId: userId,
+        });
+      } catch (error) {
+        console.error("Failed to create notifications:", error);
+      }
       
       res.json(updated);
     } catch (error) {
@@ -2043,6 +2233,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       const collaborator = await storage.addProjectCollaborator(validatedData);
+      
+      // Notify collaborators about new collaborator added
+      try {
+        const user = await storage.getUser(userId);
+        const displayName = user?.firstName || user?.email || 'A user';
+        await notifyProjectCollaborators(storage, req.params.projectId, userId, {
+          type: "collaborator_added",
+          title: "New Collaborator Added",
+          message: `${displayName} added a new collaborator`,
+          actorId: userId,
+        });
+      } catch (error) {
+        console.error("Failed to create notifications:", error);
+      }
+      
       res.json(collaborator);
     } catch (error) {
       console.error("Error adding collaborator:", error);
@@ -2060,6 +2265,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       await storage.removeProjectCollaborator(req.params.projectId, req.params.userId);
+      
+      // Notify collaborators about collaborator removal
+      try {
+        const user = await storage.getUser(currentUserId);
+        const displayName = user?.firstName || user?.email || 'A user';
+        await notifyProjectCollaborators(storage, req.params.projectId, currentUserId, {
+          type: "collaborator_removed",
+          title: "Collaborator Removed",
+          message: `${displayName} removed a collaborator`,
+          actorId: currentUserId,
+        });
+      } catch (error) {
+        console.error("Failed to create notifications:", error);
+      }
+      
       res.json({ success: true });
     } catch (error) {
       console.error("Error removing collaborator:", error);
@@ -2403,19 +2623,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch('/api/notifications/:id/read', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const notification = await storage.markNotificationAsRead(req.params.id, userId);
-      res.json(notification);
+      await storage.markNotificationAsRead(req.params.id, userId);
+      res.json({ success: true });
     } catch (error) {
       console.error("Error marking notification as read:", error);
-      if (error instanceof Error && error.message.includes('not found')) {
-        res.status(404).json({ message: error.message });
-      } else {
-        res.status(500).json({ message: "Failed to mark notification as read" });
-      }
+      res.status(500).json({ message: "Failed to mark notification as read" });
     }
   });
 
-  app.patch('/api/notifications/mark-all-read', isAuthenticated, async (req: any, res) => {
+  app.post('/api/notifications/read-all', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       await storage.markAllNotificationsAsRead(userId);
@@ -2430,7 +2646,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       await storage.deleteNotification(req.params.id, userId);
-      res.status(204).send();
+      res.json({ success: true });
     } catch (error) {
       console.error("Error deleting notification:", error);
       res.status(500).json({ message: "Failed to delete notification" });

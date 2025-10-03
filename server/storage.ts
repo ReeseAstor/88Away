@@ -165,11 +165,11 @@ export interface IStorage {
 
   // Notifications
   getNotifications(userId: string, limit?: number): Promise<Notification[]>;
-  markNotificationAsRead(notificationId: string, userId: string): Promise<Notification>;
-  markAllNotificationsAsRead(userId: string): Promise<void>;
-  deleteNotification(notificationId: string, userId: string): Promise<void>;
-  createNotification(data: InsertNotification): Promise<Notification>;
   getUnreadNotificationCount(userId: string): Promise<number>;
+  markNotificationAsRead(notificationId: string, userId: string): Promise<void>;
+  markAllNotificationsAsRead(userId: string): Promise<void>;
+  createNotification(notification: InsertNotification): Promise<Notification>;
+  deleteNotification(notificationId: string, userId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1288,8 +1288,8 @@ export class DatabaseStorage implements IStorage {
     return notifs;
   }
 
-  async markNotificationAsRead(notificationId: string, userId: string): Promise<Notification> {
-    const [notification] = await db
+  async markNotificationAsRead(notificationId: string, userId: string): Promise<void> {
+    await db
       .update(notifications)
       .set({ isRead: true })
       .where(
@@ -1297,14 +1297,7 @@ export class DatabaseStorage implements IStorage {
           eq(notifications.id, notificationId),
           eq(notifications.userId, userId)
         )
-      )
-      .returning();
-
-    if (!notification) {
-      throw new Error("Notification not found or access denied");
-    }
-
-    return notification;
+      );
   }
 
   async markAllNotificationsAsRead(userId: string): Promise<void> {
@@ -1335,7 +1328,7 @@ export class DatabaseStorage implements IStorage {
 
   async getUnreadNotificationCount(userId: string): Promise<number> {
     const result = await db
-      .select({ count: sql<number>`count(*)` })
+      .select({ count: sql<number>`count(*)::int` })
       .from(notifications)
       .where(
         and(
@@ -1343,8 +1336,7 @@ export class DatabaseStorage implements IStorage {
           eq(notifications.isRead, false)
         )
       );
-
-    return result[0]?.count ?? 0;
+    return result[0]?.count || 0;
   }
 }
 
