@@ -13,6 +13,7 @@ import Worldbuilding from "@/pages/worldbuilding";
 import Timeline from "@/pages/timeline";
 import Analytics from "@/pages/analytics";
 import Subscription from "@/pages/subscription";
+import SearchResultsPage from "@/pages/search-results";
 import Privacy from "@/pages/privacy";
 import Terms from "@/pages/terms";
 import Cookies from "@/pages/cookies";
@@ -31,6 +32,7 @@ function Router() {
       ) : (
         <>
           <Route path="/" component={Dashboard} />
+          <Route path="/search" component={SearchResultsPage} />
           <Route path="/projects/:id" component={Project} />
           <Route path="/projects/:id/characters" component={Characters} />
           <Route path="/projects/:id/worldbuilding" component={Worldbuilding} />

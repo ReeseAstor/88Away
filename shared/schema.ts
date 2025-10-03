@@ -764,3 +764,13 @@ export type OnboardingProgress = {
   };
   tourCompleted: boolean;
 };
+
+export interface SearchResult {
+  id: string;
+  title: string;
+  content: string;
+  projectId: string;
+  projectTitle: string;
+  type: 'document' | 'character' | 'worldbuilding' | 'timeline';
+  createdAt: Date;
+}
