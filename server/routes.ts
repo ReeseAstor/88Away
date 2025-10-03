@@ -4,8 +4,8 @@ import Stripe from "stripe";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { db } from "./db";
-import { documentComments } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { documentComments, activities as activitiesTable } from "@shared/schema";
+import { eq, desc, inArray } from "drizzle-orm";
 import { 
   generateContent, 
   buildMusePrompt, 
@@ -38,6 +38,7 @@ import { z } from "zod";
 import * as Y from 'yjs';
 import { CollaborationService } from "./collaboration";
 import { notifyProjectCollaborators } from "./notifications";
+import { logActivity, getUserDisplayName } from "./activities";
 
 let stripe: Stripe | null = null;
 
@@ -160,6 +161,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.applyProjectTemplate(project.id, template, userId);
       }
       
+      await logActivity(storage, project.id, userId, {
+        type: "project_created",
+        description: `${getUserDisplayName(await storage.getUser(userId))} created the project`,
+      });
+      
       res.json(project);
     } catch (error) {
       console.error("Error creating project:", error);
@@ -178,6 +184,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const validatedData = insertProjectSchema.partial().parse(req.body);
       const updated = await storage.updateProject(req.params.id, validatedData);
+      
+      await logActivity(storage, updated.id, userId, {
+        type: "project_updated",
+        description: `${getUserDisplayName(await storage.getUser(userId))} updated project settings`,
+      });
+      
       res.json(updated);
     } catch (error) {
       console.error("Error updating project:", error);
@@ -265,9 +277,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const character = await storage.createCharacter(validatedData);
       
+      const user = await storage.getUser(userId);
+      
       // Notify collaborators about new character
       try {
-        const user = await storage.getUser(userId);
         const displayName = user?.firstName || user?.email || 'A user';
         await notifyProjectCollaborators(storage, character.projectId, userId, {
           type: "character_created",
@@ -280,6 +293,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Failed to create notifications:", error);
       }
+      
+      await logActivity(storage, character.projectId, userId, {
+        type: "character_created",
+        description: `${getUserDisplayName(user)} added a new character`,
+        entityType: "character",
+        entityId: character.id,
+        entityName: character.name,
+      });
       
       res.json(character);
     } catch (error) {
@@ -311,9 +332,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validatedData = insertCharacterSchema.partial().parse(req.body);
       const updated = await storage.updateCharacter(req.params.id, validatedData);
       
+      const user = await storage.getUser(userId);
+      
       // Notify collaborators about character update
       try {
-        const user = await storage.getUser(userId);
         const displayName = user?.firstName || user?.email || 'A user';
         await notifyProjectCollaborators(storage, character.projectId, userId, {
           type: "character_updated",
@@ -326,6 +348,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Failed to create notifications:", error);
       }
+      
+      await logActivity(storage, character.projectId, userId, {
+        type: "character_updated",
+        description: `${getUserDisplayName(user)} updated a character`,
+        entityType: "character",
+        entityId: updated.id,
+        entityName: updated.name,
+      });
       
       res.json(updated);
     } catch (error) {
@@ -355,11 +385,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const characterName = character.name;
+      const user = await storage.getUser(userId);
+      
       await storage.deleteCharacter(req.params.id);
       
       // Notify collaborators about character deletion
       try {
-        const user = await storage.getUser(userId);
         const displayName = user?.firstName || user?.email || 'A user';
         await notifyProjectCollaborators(storage, character.projectId, userId, {
           type: "character_deleted",
@@ -372,6 +403,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Failed to create notifications:", error);
       }
+      
+      await logActivity(storage, character.projectId, userId, {
+        type: "character_deleted",
+        description: `${getUserDisplayName(user)} deleted a character`,
+        entityType: "character",
+        entityId: req.params.id,
+        entityName: characterName,
+      });
       
       res.json({ success: true });
     } catch (error) {
@@ -433,9 +472,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const entry = await storage.createWorldbuildingEntry(validatedData);
       
+      const user = await storage.getUser(userId);
+      
       // Notify collaborators about new worldbuilding entry
       try {
-        const user = await storage.getUser(userId);
         const displayName = user?.firstName || user?.email || 'A user';
         await notifyProjectCollaborators(storage, entry.projectId, userId, {
           type: "worldbuilding_created",
@@ -448,6 +488,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Failed to create notifications:", error);
       }
+      
+      await logActivity(storage, entry.projectId, userId, {
+        type: "worldbuilding_created",
+        description: `${getUserDisplayName(user)} added worldbuilding entry`,
+        entityType: "worldbuilding",
+        entityId: entry.id,
+        entityName: entry.title,
+      });
       
       res.json(entry);
     } catch (error) {
@@ -490,9 +538,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const updated = await storage.updateWorldbuildingEntry(req.params.id, validatedData);
       
+      const user = await storage.getUser(userId);
+      
       // Notify collaborators about worldbuilding update
       try {
-        const user = await storage.getUser(userId);
         const displayName = user?.firstName || user?.email || 'A user';
         await notifyProjectCollaborators(storage, entry.projectId, userId, {
           type: "worldbuilding_updated",
@@ -505,6 +554,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Failed to create notifications:", error);
       }
+      
+      await logActivity(storage, entry.projectId, userId, {
+        type: "worldbuilding_updated",
+        description: `${getUserDisplayName(user)} updated worldbuilding entry`,
+        entityType: "worldbuilding",
+        entityId: updated.id,
+        entityName: updated.title,
+      });
       
       res.json(updated);
     } catch (error) {
@@ -534,11 +591,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const entryTitle = entry.title;
+      const user = await storage.getUser(userId);
+      
       await storage.deleteWorldbuildingEntry(req.params.id);
       
       // Notify collaborators about worldbuilding deletion
       try {
-        const user = await storage.getUser(userId);
         const displayName = user?.firstName || user?.email || 'A user';
         await notifyProjectCollaborators(storage, entry.projectId, userId, {
           type: "worldbuilding_deleted",
@@ -551,6 +609,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Failed to create notifications:", error);
       }
+      
+      await logActivity(storage, entry.projectId, userId, {
+        type: "worldbuilding_deleted",
+        description: `${getUserDisplayName(user)} deleted worldbuilding entry`,
+        entityType: "worldbuilding",
+        entityId: req.params.id,
+        entityName: entryTitle,
+      });
       
       res.json({ success: true });
     } catch (error) {
@@ -606,9 +672,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const event = await storage.createTimelineEvent(validatedData);
       
+      const user = await storage.getUser(userId);
+      
       // Notify collaborators about new timeline event
       try {
-        const user = await storage.getUser(userId);
         const displayName = user?.firstName || user?.email || 'A user';
         await notifyProjectCollaborators(storage, event.projectId, userId, {
           type: "timeline_created",
@@ -621,6 +688,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Failed to create notifications:", error);
       }
+      
+      await logActivity(storage, event.projectId, userId, {
+        type: "timeline_created",
+        description: `${getUserDisplayName(user)} added a timeline event`,
+        entityType: "timeline",
+        entityId: event.id,
+        entityName: event.title,
+      });
       
       res.json(event);
     } catch (error) {
@@ -669,9 +744,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const updated = await storage.updateTimelineEvent(req.params.id, validatedData);
       
+      const user = await storage.getUser(userId);
+      
       // Notify collaborators about timeline event update
       try {
-        const user = await storage.getUser(userId);
         const displayName = user?.firstName || user?.email || 'A user';
         await notifyProjectCollaborators(storage, event.projectId, userId, {
           type: "timeline_updated",
@@ -684,6 +760,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Failed to create notifications:", error);
       }
+      
+      await logActivity(storage, event.projectId, userId, {
+        type: "timeline_updated",
+        description: `${getUserDisplayName(user)} updated a timeline event`,
+        entityType: "timeline",
+        entityId: updated.id,
+        entityName: updated.title,
+      });
       
       res.json(updated);
     } catch (error) {
@@ -713,11 +797,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const eventTitle = event.title;
+      const user = await storage.getUser(userId);
+      
       await storage.deleteTimelineEvent(req.params.id);
       
       // Notify collaborators about timeline event deletion
       try {
-        const user = await storage.getUser(userId);
         const displayName = user?.firstName || user?.email || 'A user';
         await notifyProjectCollaborators(storage, event.projectId, userId, {
           type: "timeline_deleted",
@@ -730,6 +815,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Failed to create notifications:", error);
       }
+      
+      await logActivity(storage, event.projectId, userId, {
+        type: "timeline_deleted",
+        description: `${getUserDisplayName(user)} deleted a timeline event`,
+        entityType: "timeline",
+        entityId: req.params.id,
+        entityName: eventTitle,
+      });
       
       res.json({ success: true });
     } catch (error) {
@@ -856,9 +949,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         authorId: userId
       });
       
+      const user = await storage.getUser(userId);
+      
       // Notify collaborators about new document
       try {
-        const user = await storage.getUser(userId);
         const displayName = user?.firstName || user?.email || 'A user';
         await notifyProjectCollaborators(storage, document.projectId, userId, {
           type: "document_created",
@@ -871,6 +965,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Failed to create notifications:", error);
       }
+      
+      await logActivity(storage, document.projectId, userId, {
+        type: "document_created",
+        description: `${getUserDisplayName(user)} created a new document`,
+        entityType: "document",
+        entityId: document.id,
+        entityName: document.title,
+      });
       
       res.json(document);
     } catch (error) {
@@ -907,9 +1009,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const totalWordCount = allDocuments.reduce((sum, doc) => sum + (doc.wordCount || 0), 0);
       await storage.updateProject(document.projectId, { currentWordCount: totalWordCount });
       
+      const user = await storage.getUser(userId);
+      
       // Notify collaborators about document update
       try {
-        const user = await storage.getUser(userId);
         const displayName = user?.firstName || user?.email || 'A user';
         await notifyProjectCollaborators(storage, document.projectId, userId, {
           type: "document_updated",
@@ -922,6 +1025,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Failed to create notifications:", error);
       }
+      
+      await logActivity(storage, document.projectId, userId, {
+        type: "document_updated",
+        description: `${getUserDisplayName(user)} updated a document`,
+        entityType: "document",
+        entityId: updated.id,
+        entityName: updated.title,
+      });
       
       res.json(updated);
     } catch (error) {
@@ -2234,9 +2345,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const collaborator = await storage.addProjectCollaborator(validatedData);
       
+      const user = await storage.getUser(userId);
+      const addedUser = await storage.getUser(req.body.userId);
+      
       // Notify collaborators about new collaborator added
       try {
-        const user = await storage.getUser(userId);
         const displayName = user?.firstName || user?.email || 'A user';
         await notifyProjectCollaborators(storage, req.params.projectId, userId, {
           type: "collaborator_added",
@@ -2247,6 +2360,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Failed to create notifications:", error);
       }
+      
+      await logActivity(storage, req.params.projectId, userId, {
+        type: "collaborator_added",
+        description: `${getUserDisplayName(user)} added ${getUserDisplayName(addedUser)} as a collaborator`,
+      });
       
       res.json(collaborator);
     } catch (error) {
@@ -2264,11 +2382,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Only project owners can remove collaborators" });
       }
 
+      const removedUser = await storage.getUser(req.params.userId);
+      
       await storage.removeProjectCollaborator(req.params.projectId, req.params.userId);
+      
+      const user = await storage.getUser(currentUserId);
       
       // Notify collaborators about collaborator removal
       try {
-        const user = await storage.getUser(currentUserId);
         const displayName = user?.firstName || user?.email || 'A user';
         await notifyProjectCollaborators(storage, req.params.projectId, currentUserId, {
           type: "collaborator_removed",
@@ -2279,6 +2400,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Failed to create notifications:", error);
       }
+      
+      await logActivity(storage, req.params.projectId, currentUserId, {
+        type: "collaborator_removed",
+        description: `${getUserDisplayName(user)} removed ${getUserDisplayName(removedUser)} as a collaborator`,
+      });
       
       res.json({ success: true });
     } catch (error) {
@@ -2650,6 +2776,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting notification:", error);
       res.status(500).json({ message: "Failed to delete notification" });
+    }
+  });
+
+  // Activity routes
+  app.get('/api/projects/:projectId/activities', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { projectId } = req.params;
+      
+      const project = await storage.getProject(projectId);
+      
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const hasAccess = project.ownerId === userId || 
+        project.collaborators.some(c => c.userId === userId);
+      
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+      const activities = await storage.getProjectActivities(projectId, limit);
+      
+      res.json(activities);
+    } catch (error) {
+      console.error("Error fetching project activities:", error);
+      res.status(500).json({ message: "Failed to fetch activities" });
+    }
+  });
+
+  app.get('/api/activities', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      const userProjects = await storage.getUserProjects(userId);
+      const projectIds = userProjects.map(p => p.id);
+      
+      if (projectIds.length === 0) {
+        return res.json([]);
+      }
+
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+      
+      const activities = await db
+        .select()
+        .from(activitiesTable)
+        .where(inArray(activitiesTable.projectId, projectIds))
+        .orderBy(desc(activitiesTable.createdAt))
+        .limit(limit);
+      
+      res.json(activities);
+    } catch (error) {
+      console.error("Error fetching user activities:", error);
+      res.status(500).json({ message: "Failed to fetch activities" });
     }
   });
 

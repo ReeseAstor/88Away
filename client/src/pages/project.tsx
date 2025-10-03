@@ -29,6 +29,7 @@ import VersionHistory from "@/components/version-history";
 import MergeDialog from "@/components/merge-dialog";
 import ConflictResolutionPanel from "@/components/conflict-resolution-panel";
 import DiffViewer from "@/components/diff-viewer";
+import { ActivityFeed } from "@/components/activity-feed";
 import {
   useDocumentComments,
   useCreateComment,
@@ -604,6 +605,9 @@ function ProjectContent() {
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* Activity Feed */}
+                <ActivityFeed projectId={id} className="mt-6" />
               </TabsContent>
 
               {/* Documents Tab */}
