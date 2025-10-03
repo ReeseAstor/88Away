@@ -165,11 +165,11 @@ export interface IStorage {
 
   // Notifications
   getNotifications(userId: string, limit?: number): Promise<Notification[]>;
-  getUnreadCount(userId: string): Promise<number>;
-  markNotificationAsRead(id: string, userId: string): Promise<void>;
+  markNotificationAsRead(notificationId: string, userId: string): Promise<Notification>;
   markAllNotificationsAsRead(userId: string): Promise<void>;
-  createNotification(notification: InsertNotification): Promise<Notification>;
-  deleteNotification(id: string, userId: string): Promise<void>;
+  deleteNotification(notificationId: string, userId: string): Promise<void>;
+  createNotification(data: InsertNotification): Promise<Notification>;
+  getUnreadNotificationCount(userId: string): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1279,19 +1279,7 @@ export class DatabaseStorage implements IStorage {
 
   async getNotifications(userId: string, limit: number = 50): Promise<Notification[]> {
     const notifs = await db
-      .select({
-        id: notifications.id,
-        userId: notifications.userId,
-        type: notifications.type,
-        title: notifications.title,
-        message: notifications.message,
-        projectId: notifications.projectId,
-        resourceId: notifications.resourceId,
-        resourceType: notifications.resourceType,
-        actorId: notifications.actorId,
-        isRead: notifications.isRead,
-        createdAt: notifications.createdAt,
-      })
+      .select()
       .from(notifications)
       .where(eq(notifications.userId, userId))
       .orderBy(desc(notifications.createdAt))
@@ -1300,7 +1288,52 @@ export class DatabaseStorage implements IStorage {
     return notifs;
   }
 
-  async getUnreadCount(userId: string): Promise<number> {
+  async markNotificationAsRead(notificationId: string, userId: string): Promise<Notification> {
+    const [notification] = await db
+      .update(notifications)
+      .set({ isRead: true })
+      .where(
+        and(
+          eq(notifications.id, notificationId),
+          eq(notifications.userId, userId)
+        )
+      )
+      .returning();
+
+    if (!notification) {
+      throw new Error("Notification not found or access denied");
+    }
+
+    return notification;
+  }
+
+  async markAllNotificationsAsRead(userId: string): Promise<void> {
+    await db
+      .update(notifications)
+      .set({ isRead: true })
+      .where(eq(notifications.userId, userId));
+  }
+
+  async deleteNotification(notificationId: string, userId: string): Promise<void> {
+    await db
+      .delete(notifications)
+      .where(
+        and(
+          eq(notifications.id, notificationId),
+          eq(notifications.userId, userId)
+        )
+      );
+  }
+
+  async createNotification(data: InsertNotification): Promise<Notification> {
+    const [newNotification] = await db
+      .insert(notifications)
+      .values(data)
+      .returning();
+    return newNotification;
+  }
+
+  async getUnreadNotificationCount(userId: string): Promise<number> {
     const result = await db
       .select({ count: sql<number>`count(*)` })
       .from(notifications)
@@ -1312,44 +1345,6 @@ export class DatabaseStorage implements IStorage {
       );
 
     return result[0]?.count ?? 0;
-  }
-
-  async markNotificationAsRead(id: string, userId: string): Promise<void> {
-    await db
-      .update(notifications)
-      .set({ isRead: true })
-      .where(
-        and(
-          eq(notifications.id, id),
-          eq(notifications.userId, userId)
-        )
-      );
-  }
-
-  async markAllNotificationsAsRead(userId: string): Promise<void> {
-    await db
-      .update(notifications)
-      .set({ isRead: true })
-      .where(eq(notifications.userId, userId));
-  }
-
-  async createNotification(notification: InsertNotification): Promise<Notification> {
-    const [newNotification] = await db
-      .insert(notifications)
-      .values(notification)
-      .returning();
-    return newNotification;
-  }
-
-  async deleteNotification(id: string, userId: string): Promise<void> {
-    await db
-      .delete(notifications)
-      .where(
-        and(
-          eq(notifications.id, id),
-          eq(notifications.userId, userId)
-        )
-      );
   }
 }
 
