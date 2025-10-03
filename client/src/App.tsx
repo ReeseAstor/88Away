@@ -15,6 +15,7 @@ import Analytics from "@/pages/analytics";
 import Subscription from "@/pages/subscription";
 import SearchResultsPage from "@/pages/search-results";
 import PromptLibraryPage from "@/pages/prompt-library";
+import Emails from "@/pages/emails";
 import Privacy from "@/pages/privacy";
 import Terms from "@/pages/terms";
 import Cookies from "@/pages/cookies";
@@ -35,6 +36,7 @@ function Router() {
           <Route path="/" component={Dashboard} />
           <Route path="/search" component={SearchResultsPage} />
           <Route path="/prompts" component={PromptLibraryPage} />
+          <Route path="/emails" component={Emails} />
           <Route path="/projects/:id" component={Project} />
           <Route path="/projects/:id/characters" component={Characters} />
           <Route path="/projects/:id/worldbuilding" component={Worldbuilding} />
