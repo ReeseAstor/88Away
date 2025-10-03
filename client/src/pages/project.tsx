@@ -15,6 +15,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest } from "@/lib/queryClient";
 import { useStore } from "@/lib/store";
+import { useAiModalStore } from "@/stores/ai-modal-store";
 import Sidebar from "@/components/sidebar";
 import RichTextEditor from "@/components/rich-text-editor";
 import AiAssistantModal from "@/components/ai-assistant-modal";
@@ -89,7 +90,7 @@ function ProjectContent() {
   const { ydoc, awareness, isConnected, onlineUsers, sendComment, userColor, userRole, xmlFragment } = useCollaboration();
   
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [showAiModal, setShowAiModal] = useState(false);
+  const { isOpen: showAiModal, close: closeAiModal, openWithPrompt } = useAiModalStore();
   const [showAdvancedAnalysisModal, setShowAdvancedAnalysisModal] = useState(false);
   const [showCommentSidebar, setShowCommentSidebar] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<string | null>(null);
@@ -475,7 +476,7 @@ function ProjectContent() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setShowAiModal(true)}
+                onClick={() => openWithPrompt({ persona: null, prompt: "" })}
                 data-testid="button-ai-assistant"
               >
                 <Zap className="h-4 w-4 mr-2" />
@@ -923,16 +924,11 @@ function ProjectContent() {
       </main>
 
       {/* AI Assistant Modal */}
-      {showAiModal && project && (
-        <AiAssistantModal
-          isOpen={showAiModal}
-          onClose={() => setShowAiModal(false)}
-          projectId={project.id}
-          projectTitle={project.title}
-          documents={documents}
-          characters={characters}
-        />
-      )}
+      <AiAssistantModal
+        open={showAiModal}
+        onClose={closeAiModal}
+        projects={[project]}
+      />
 
       {/* Advanced Analysis Modal */}
       {showAdvancedAnalysisModal && project && (

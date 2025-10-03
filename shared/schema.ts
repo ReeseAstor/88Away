@@ -9,6 +9,8 @@ import {
   integer,
   boolean,
   pgEnum,
+  serial,
+  unique,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -334,6 +336,31 @@ export const activities = pgTable("activities", {
   metadata: jsonb("metadata"),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// Prompts table for writing prompt library
+export const prompts = pgTable("prompts", {
+  id: serial("id").primaryKey(),
+  title: varchar("title", { length: 255 }).notNull(),
+  content: text("content").notNull(),
+  category: varchar("category", { length: 100 }).notNull(),
+  subcategory: varchar("subcategory", { length: 100 }),
+  tags: text("tags").array(),
+  persona: varchar("persona", { length: 50 }).notNull(),
+  targetRole: varchar("target_role", { length: 100 }).notNull(),
+  isFeatured: boolean("is_featured").default(false),
+  usageCount: integer("usage_count").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// User favorite prompts for tracking saved prompts
+export const userFavoritePrompts = pgTable("user_favorite_prompts", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  promptId: integer("prompt_id").notNull().references(() => prompts.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  uniqueUserPrompt: unique().on(table.userId, table.promptId),
+}));
 
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
@@ -661,6 +688,17 @@ export const insertActivitySchema = createInsertSchema(activities).omit({
   createdAt: true,
 });
 
+// Prompt insert schemas
+export const insertPromptSchema = createInsertSchema(prompts).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertUserFavoritePromptSchema = createInsertSchema(userFavoritePrompts).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Branching insert schemas
 export const insertDocumentBranchSchema = createInsertSchema(documentBranches).omit({
   id: true,
@@ -728,6 +766,12 @@ export type DocumentBranch = typeof documentBranches.$inferSelect;
 export type InsertDocumentBranch = z.infer<typeof insertDocumentBranchSchema>;
 export type BranchMergeEvent = typeof branchMergeEvents.$inferSelect;
 export type InsertBranchMergeEvent = z.infer<typeof insertBranchMergeEventSchema>;
+
+// Prompt types
+export type Prompt = typeof prompts.$inferSelect;
+export type InsertPrompt = z.infer<typeof insertPromptSchema>;
+export type UserFavoritePrompt = typeof userFavoritePrompts.$inferSelect;
+export type InsertUserFavoritePrompt = z.infer<typeof insertUserFavoritePromptSchema>;
 
 // Extended types with relations
 export type ProjectWithCollaborators = Project & {

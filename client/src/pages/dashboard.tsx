@@ -17,6 +17,7 @@ import GettingStartedChecklist from "@/components/getting-started-checklist";
 import { ActivityFeed } from "@/components/activity-feed";
 import { useState } from "react";
 import { Link } from "wouter";
+import { useAiModalStore } from "@/stores/ai-modal-store";
 import { 
   BookOpen, 
   Users, 
@@ -46,7 +47,7 @@ export default function Dashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [showProjectModal, setShowProjectModal] = useState(false);
-  const [showAiModal, setShowAiModal] = useState(false);
+  const { isOpen: showAiModal, close: closeAiModal, openWithPrompt } = useAiModalStore();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [showChecklist, setShowChecklist] = useState(false);
@@ -501,7 +502,7 @@ export default function Dashboard() {
                       <Button 
                         variant="secondary" 
                         size="sm"
-                        onClick={() => setShowAiModal(true)}
+                        onClick={() => openWithPrompt({ persona: null, prompt: "" })}
                         data-testid="button-ai-generate-scene"
                       >
                         <Zap className="mr-2 h-3 w-3" />
@@ -510,7 +511,7 @@ export default function Dashboard() {
                       <Button 
                         variant="secondary" 
                         size="sm"
-                        onClick={() => setShowAiModal(true)}
+                        onClick={() => openWithPrompt({ persona: null, prompt: "" })}
                         data-testid="button-ai-polish-text"
                       >
                         <Edit3 className="mr-2 h-3 w-3" />
@@ -519,7 +520,7 @@ export default function Dashboard() {
                       <Button 
                         variant="secondary" 
                         size="sm"
-                        onClick={() => setShowAiModal(true)}
+                        onClick={() => openWithPrompt({ persona: null, prompt: "" })}
                         data-testid="button-ai-create-outline"
                       >
                         <FileText className="mr-2 h-3 w-3" />
@@ -642,7 +643,7 @@ export default function Dashboard() {
 
       <AiAssistantModal
         open={showAiModal}
-        onClose={() => setShowAiModal(false)}
+        onClose={closeAiModal}
         projects={projects}
       />
 

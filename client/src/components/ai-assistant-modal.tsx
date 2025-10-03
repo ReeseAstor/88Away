@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import { useAiModalStore } from "@/stores/ai-modal-store";
 import { 
   Lightbulb, 
   Edit3, 
@@ -33,12 +34,26 @@ type PersonaType = "muse" | "editor" | "coach";
 
 export default function AiAssistantModal({ open, onClose, projects }: AiAssistantModalProps) {
   const { toast } = useToast();
+  const { prefillData, clearPrefill } = useAiModalStore();
   const [selectedPersona, setSelectedPersona] = useState<PersonaType | null>(null);
   const [selectedProject, setSelectedProject] = useState("");
   const [prompt, setPrompt] = useState("");
   const [creativity, setCreativity] = useState([70]);
   const [length, setLength] = useState("medium");
   const [result, setResult] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open && prefillData) {
+      if (prefillData.persona) {
+        setSelectedPersona(prefillData.persona);
+      }
+      setPrompt(prefillData.prompt);
+      if (prefillData.projectId) {
+        setSelectedProject(prefillData.projectId);
+      }
+      clearPrefill();
+    }
+  }, [open, prefillData, clearPrefill]);
 
   // Fetch AI usage data
   const { data: usageData, isLoading: usageLoading } = useQuery<{
