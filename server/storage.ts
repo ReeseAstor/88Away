@@ -15,6 +15,7 @@ import {
   documentComments,
   collaborationPresence,
   notifications,
+  activities,
   type User,
   type UpsertUser,
   type Project,
@@ -47,6 +48,8 @@ import {
   type Notification,
   type InsertNotification,
   type OnboardingProgress,
+  type Activity,
+  type InsertActivity,
 } from "@shared/schema";
 import { calculateWordCount } from "@shared/utils";
 import { db } from "./db";
@@ -170,6 +173,10 @@ export interface IStorage {
   markAllNotificationsAsRead(userId: string): Promise<void>;
   createNotification(notification: InsertNotification): Promise<Notification>;
   deleteNotification(notificationId: string, userId: string): Promise<void>;
+
+  // Activities
+  getProjectActivities(projectId: string, limit?: number): Promise<Activity[]>;
+  createActivity(activity: InsertActivity): Promise<Activity>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1337,6 +1344,23 @@ export class DatabaseStorage implements IStorage {
         )
       );
     return result[0]?.count || 0;
+  }
+
+  async getProjectActivities(projectId: string, limit: number = 50): Promise<Activity[]> {
+    return await db
+      .select()
+      .from(activities)
+      .where(eq(activities.projectId, projectId))
+      .orderBy(desc(activities.createdAt))
+      .limit(limit);
+  }
+
+  async createActivity(activity: InsertActivity): Promise<Activity> {
+    const [created] = await db
+      .insert(activities)
+      .values(activity)
+      .returning();
+    return created;
   }
 }
 

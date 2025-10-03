@@ -274,6 +274,26 @@ export const notificationTypeEnum = pgEnum('notification_type', [
   'comment_added'
 ]);
 
+// Activity type enum
+export const activityTypeEnum = pgEnum('activity_type', [
+  'project_created',
+  'project_updated',
+  'document_created',
+  'document_updated',
+  'document_deleted',
+  'character_created',
+  'character_updated',
+  'character_deleted',
+  'worldbuilding_created',
+  'worldbuilding_updated',
+  'worldbuilding_deleted',
+  'timeline_created',
+  'timeline_updated',
+  'timeline_deleted',
+  'collaborator_added',
+  'collaborator_removed'
+]);
+
 // Collaboration presence for real-time user tracking
 export const collaborationPresence = pgTable("collaboration_presence", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -301,6 +321,20 @@ export const notifications = pgTable("notifications", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Activities table
+export const activities = pgTable("activities", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  type: activityTypeEnum("type").notNull(),
+  description: text("description").notNull(),
+  entityType: varchar("entity_type"),
+  entityId: varchar("entity_id"),
+  entityName: varchar("entity_name"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   ownedProjects: many(projects),
@@ -316,6 +350,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   branchMergeEvents: many(branchMergeEvents),
   notifications: many(notifications),
   triggeredNotifications: many(notifications),
+  activities: many(activities),
 }));
 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
@@ -333,6 +368,7 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   activityLogs: many(activityLogs),
   collaborationPresence: many(collaborationPresence),
   notifications: many(notifications),
+  activities: many(activities),
 }));
 
 export const projectCollaboratorsRelations = relations(projectCollaborators, ({ one }) => ({
@@ -536,6 +572,17 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
   }),
 }));
 
+export const activitiesRelations = relations(activities, ({ one }) => ({
+  project: one(projects, {
+    fields: [activities.projectId],
+    references: [projects.id],
+  }),
+  user: one(users, {
+    fields: [activities.userId],
+    references: [users.id],
+  }),
+}));
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).pick({
   email: true,
@@ -609,6 +656,11 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
   createdAt: true,
 });
 
+export const insertActivitySchema = createInsertSchema(activities).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Branching insert schemas
 export const insertDocumentBranchSchema = createInsertSchema(documentBranches).omit({
   id: true,
@@ -666,6 +718,10 @@ export type CollaborationPresence = typeof collaborationPresence.$inferSelect;
 // Notification types
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type Notification = typeof notifications.$inferSelect;
+
+// Activity types
+export type InsertActivity = z.infer<typeof insertActivitySchema>;
+export type Activity = typeof activities.$inferSelect;
 
 // Branching types
 export type DocumentBranch = typeof documentBranches.$inferSelect;

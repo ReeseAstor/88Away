@@ -14,6 +14,7 @@ import ProjectModal from "@/components/project-modal";
 import AiAssistantModal from "@/components/ai-assistant-modal";
 import OnboardingWelcome from "@/components/onboarding-welcome";
 import GettingStartedChecklist from "@/components/getting-started-checklist";
+import { ActivityFeed } from "@/components/activity-feed";
 import { useState } from "react";
 import { Link } from "wouter";
 import { 
@@ -623,6 +624,9 @@ export default function Dashboard() {
                   </Link>
                 </CardContent>
               </Card>
+
+              {/* Activity Feed */}
+              <ActivityFeed className="" />
             </div>
           </div>
         </div>
