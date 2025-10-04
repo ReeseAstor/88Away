@@ -209,10 +209,6 @@ export interface IStorage {
   // AI Usage tracking
   getUserAIUsageCount(userId: string): Promise<number>;
   incrementAIUsage(userId: string, projectId: string | null, type: string): Promise<void>;
-  
-  // Analysis cache
-  getAnalysisCache(key: string): Promise<any | null>;
-  setAnalysisCache(key: string, data: any): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1664,30 +1660,6 @@ export class DatabaseStorage implements IStorage {
       prompt: `OCR extraction - ${type}`,
       response: 'OCR processed',
       metadata: { type, timestamp: new Date() }
-    });
-  }
-
-  // Analysis cache (simple in-memory cache for now)
-  private analysisCache = new Map<string, { data: any; timestamp: Date }>();
-
-  async getAnalysisCache(key: string): Promise<any | null> {
-    const cached = this.analysisCache.get(key);
-    if (!cached) return null;
-    
-    // Return cached data if less than 24 hours old
-    const age = Date.now() - cached.timestamp.getTime();
-    if (age > 86400000) {
-      this.analysisCache.delete(key);
-      return null;
-    }
-    
-    return cached;
-  }
-
-  async setAnalysisCache(key: string, data: any): Promise<void> {
-    this.analysisCache.set(key, {
-      data,
-      timestamp: new Date()
     });
   }
 }
