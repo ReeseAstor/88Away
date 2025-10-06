@@ -18,6 +18,8 @@ import {
   activities,
   prompts,
   userFavoritePrompts,
+  kdpMetadata,
+  romanceSeries,
   type User,
   type UpsertUser,
   type Project,
@@ -55,6 +57,10 @@ import {
   type SearchResult,
   type Prompt,
   type UserFavoritePrompt,
+  type KdpMetadata,
+  type InsertKdpMetadata,
+  type RomanceSeries,
+  type InsertRomanceSeries,
 } from "@shared/schema";
 import { calculateWordCount } from "@shared/utils";
 import { db } from "./db";
@@ -198,6 +204,19 @@ export interface IStorage {
   getUserFavoritePrompts(userId: string): Promise<Prompt[]>;
   addFavoritePrompt(userId: string, promptId: number): Promise<UserFavoritePrompt>;
   removeFavoritePrompt(userId: string, promptId: number): Promise<void>;
+
+  // KDP Metadata operations
+  createKDPMetadata(metadata: InsertKdpMetadata): Promise<KdpMetadata>;
+  getKDPMetadata(bookId: string): Promise<KdpMetadata | undefined>;
+  updateKDPMetadata(bookId: string, updates: Partial<InsertKdpMetadata>): Promise<KdpMetadata>;
+  deleteKDPMetadata(bookId: string): Promise<void>;
+  getProjectKDPMetadata(projectId: string): Promise<KdpMetadata[]>;
+
+  // Romance Series operations
+  getUserRomanceSeries(userId: string): Promise<RomanceSeries[]>;
+  createRomanceSeries(series: InsertRomanceSeries): Promise<RomanceSeries>;
+  updateRomanceSeries(seriesId: string, updates: Partial<InsertRomanceSeries>): Promise<RomanceSeries>;
+  deleteRomanceSeries(seriesId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1590,6 +1609,74 @@ export class DatabaseStorage implements IStorage {
           eq(userFavoritePrompts.promptId, promptId)
         )
       );
+  }
+
+  // KDP Metadata operations
+  async createKDPMetadata(metadata: InsertKdpMetadata): Promise<KdpMetadata> {
+    const [newMetadata] = await db
+      .insert(kdpMetadata)
+      .values(metadata)
+      .returning();
+    return newMetadata;
+  }
+
+  async getKDPMetadata(bookId: string): Promise<KdpMetadata | undefined> {
+    const [metadata] = await db
+      .select()
+      .from(kdpMetadata)
+      .where(eq(kdpMetadata.kdpBookId, bookId));
+    return metadata;
+  }
+
+  async updateKDPMetadata(bookId: string, updates: Partial<InsertKdpMetadata>): Promise<KdpMetadata> {
+    const [updated] = await db
+      .update(kdpMetadata)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(kdpMetadata.kdpBookId, bookId))
+      .returning();
+    return updated;
+  }
+
+  async deleteKDPMetadata(bookId: string): Promise<void> {
+    await db.delete(kdpMetadata).where(eq(kdpMetadata.kdpBookId, bookId));
+  }
+
+  async getProjectKDPMetadata(projectId: string): Promise<KdpMetadata[]> {
+    return await db
+      .select()
+      .from(kdpMetadata)
+      .where(eq(kdpMetadata.projectId, projectId))
+      .orderBy(desc(kdpMetadata.createdAt));
+  }
+
+  // Romance Series operations
+  async getUserRomanceSeries(userId: string): Promise<RomanceSeries[]> {
+    return await db
+      .select()
+      .from(romanceSeries)
+      .where(eq(romanceSeries.authorId, userId))
+      .orderBy(asc(romanceSeries.title));
+  }
+
+  async createRomanceSeries(series: InsertRomanceSeries): Promise<RomanceSeries> {
+    const [newSeries] = await db
+      .insert(romanceSeries)
+      .values(series)
+      .returning();
+    return newSeries;
+  }
+
+  async updateRomanceSeries(seriesId: string, updates: Partial<InsertRomanceSeries>): Promise<RomanceSeries> {
+    const [updated] = await db
+      .update(romanceSeries)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(romanceSeries.id, seriesId))
+      .returning();
+    return updated;
+  }
+
+  async deleteRomanceSeries(seriesId: string): Promise<void> {
+    await db.delete(romanceSeries).where(eq(romanceSeries.id, seriesId));
   }
 }
 

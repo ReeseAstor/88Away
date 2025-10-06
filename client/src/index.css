@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Source+Sans+Pro:wght@300;400;600;700&family=Source+Serif+Pro:wght@400;600&family=Source+Code+Pro:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Source+Sans+Pro:wght@300;400;600;700&family=Source+Serif+Pro:wght@400;600&family=Source+Code+Pro:wght@400;500&family=Playfair+Display:wght@400;500;600;700&family=Dancing+Script:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -37,9 +37,62 @@
   --sidebar-accent-foreground: hsl(203.8863, 88.2845%, 53.1373%);
   --sidebar-border: hsl(210, 20%, 85%);
   --sidebar-ring: hsl(203.8863, 88.2845%, 53.1373%);
-  --font-sans: 'Open Sans', sans-serif;
-  --font-serif: 'Open Sans', sans-serif;
-  --font-mono: 'Open Sans', sans-serif;
+  
+  /* Romance-themed font variables */
+  --font-sans: 'Inter', 'Source Sans Pro', sans-serif;
+  --font-serif: 'Playfair Display', 'Source Serif Pro', serif;
+  --font-script: 'Dancing Script', cursive;
+  --font-mono: 'Source Code Pro', monospace;
+  
+  /* Romance color variables */
+  --romance-burgundy-50: #fdf2f8;
+  --romance-burgundy-100: #fce7f3;
+  --romance-burgundy-200: #fbcfe8;
+  --romance-burgundy-300: #f9a8d4;
+  --romance-burgundy-400: #f472b6;
+  --romance-burgundy-500: #ec4899;
+  --romance-burgundy-600: #db2777;
+  --romance-burgundy-700: #be185d;
+  --romance-burgundy-800: #9d174d;
+  --romance-burgundy-900: #831843;
+  --romance-burgundy-950: #500724;
+  
+  --romance-rose-gold-50: #fefcfb;
+  --romance-rose-gold-100: #fef7f0;
+  --romance-rose-gold-200: #fcebe0;
+  --romance-rose-gold-300: #f9d5c1;
+  --romance-rose-gold-400: #f4b896;
+  --romance-rose-gold-500: #ee9968;
+  --romance-rose-gold-600: #e17d47;
+  --romance-rose-gold-700: #cf6532;
+  --romance-rose-gold-800: #ac522b;
+  --romance-rose-gold-900: #8b4526;
+  --romance-rose-gold-950: #4b2111;
+  
+  --romance-blush-50: #fef7f7;
+  --romance-blush-100: #feecec;
+  --romance-blush-200: #fddede;
+  --romance-blush-300: #fbc5c5;
+  --romance-blush-400: #f79e9e;
+  --romance-blush-500: #f07575;
+  --romance-blush-600: #e25555;
+  --romance-blush-700: #c73e3e;
+  --romance-blush-800: #a53434;
+  --romance-blush-900: #892f2f;
+  --romance-blush-950: #4a1515;
+  
+  --romance-champagne-50: #fefef9;
+  --romance-champagne-100: #fefce8;
+  --romance-champagne-200: #fef7c3;
+  --romance-champagne-300: #feed8e;
+  --romance-champagne-400: #fcdd57;
+  --romance-champagne-500: #f9c23c;
+  --romance-champagne-600: #f0a315;
+  --romance-champagne-700: #cc7914;
+  --romance-champagne-800: #a35f17;
+  --romance-champagne-900: #865019;
+  --romance-champagne-950: #4c2a0b;
+  
   --radius: 0.5rem;
   --shadow-2xs: 0px 1px 2px 0px hsl(203.8863, 88.2845%, 53.1373%, 0.05);
   --shadow-xs: 0px 1px 2px 0px hsl(203.8863, 88.2845%, 53.1373%, 0.05);
@@ -164,5 +217,110 @@
 
   .prose-custom em {
     @apply text-foreground opacity-80;
+  }
+  
+  /* Romance-specific component classes */
+  .romance-card {
+    @apply bg-gradient-to-br from-romance-champagne-50 to-romance-blush-50 border border-romance-burgundy-200 shadow-romance-md rounded-lg;
+  }
+  
+  .romance-button-primary {
+    @apply bg-gradient-to-r from-romance-burgundy-600 to-romance-burgundy-700 hover:from-romance-burgundy-700 hover:to-romance-burgundy-800 text-white font-medium px-4 py-2 rounded-lg shadow-romance-sm transition-all duration-200;
+  }
+  
+  .romance-button-secondary {
+    @apply bg-gradient-to-r from-romance-rose-gold-100 to-romance-champagne-100 hover:from-romance-rose-gold-200 hover:to-romance-champagne-200 text-romance-burgundy-800 font-medium px-4 py-2 rounded-lg border border-romance-burgundy-200 transition-all duration-200;
+  }
+  
+  .romance-input {
+    @apply border-romance-burgundy-200 focus:border-romance-burgundy-400 focus:ring-romance-burgundy-400 focus:ring-2 rounded-lg px-3 py-2 bg-white/80 backdrop-blur-sm;
+  }
+  
+  .romance-badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-romance-blush-100 text-romance-burgundy-800 border border-romance-blush-200;
+  }
+  
+  .romance-section-header {
+    @apply font-serif text-2xl font-semibold text-romance-burgundy-800 mb-4 pb-2 border-b-2 border-romance-rose-gold-200;
+  }
+  
+  .romance-text-primary {
+    @apply text-romance-burgundy-800;
+  }
+  
+  .romance-text-secondary {
+    @apply text-romance-burgundy-600;
+  }
+  
+  .romance-text-muted {
+    @apply text-romance-burgundy-500;
+  }
+  
+  .heat-level-sweet {
+    @apply bg-romance-champagne-100 text-romance-champagne-800 border-romance-champagne-300;
+  }
+  
+  .heat-level-warm {
+    @apply bg-romance-blush-100 text-romance-blush-800 border-romance-blush-300;
+  }
+  
+  .heat-level-steamy {
+    @apply bg-romance-burgundy-100 text-romance-burgundy-800 border-romance-burgundy-300;
+  }
+  
+  .heat-level-scorching {
+    @apply bg-passion-100 text-passion-800 border-passion-300;
+  }
+  
+  .trope-category-relationship {
+    @apply bg-tender-100 text-tender-800 border-tender-300;
+  }
+  
+  .trope-category-plot {
+    @apply bg-romance-rose-gold-100 text-romance-rose-gold-800 border-romance-rose-gold-300;
+  }
+  
+  .trope-category-character {
+    @apply bg-romance-champagne-100 text-romance-champagne-800 border-romance-champagne-300;
+  }
+  
+  .trope-category-setting {
+    @apply bg-sensual-100 text-sensual-800 border-sensual-300;
+  }
+  
+  .romantic-gradient-bg {
+    @apply bg-gradient-to-br from-romance-champagne-50 via-romance-blush-50 to-romance-burgundy-50;
+  }
+  
+  .romantic-hover-effect {
+    @apply transition-all duration-300 hover:scale-105 hover:shadow-romance-lg;
+  }
+  
+  .series-book-connector {
+    @apply relative before:absolute before:left-1/2 before:top-full before:w-0.5 before:h-8 before:bg-romance-burgundy-300 before:transform before:-translate-x-1/2;
+  }
+  
+  .character-relationship-line {
+    @apply stroke-romance-burgundy-400 stroke-2 fill-none;
+  }
+  
+  .ai-romance-response {
+    @apply bg-gradient-to-r from-tender-50 to-romance-blush-50 border-l-4 border-romance-burgundy-400 p-4 rounded-r-lg;
+  }
+  
+  .publishing-status-draft {
+    @apply bg-gray-100 text-gray-800 border-gray-300;
+  }
+  
+  .publishing-status-in-progress {
+    @apply bg-romance-champagne-100 text-romance-champagne-800 border-romance-champagne-300;
+  }
+  
+  .publishing-status-ready {
+    @apply bg-romance-rose-gold-100 text-romance-rose-gold-800 border-romance-rose-gold-300;
+  }
+  
+  .publishing-status-published {
+    @apply bg-green-100 text-green-800 border-green-300;
   }
 }
