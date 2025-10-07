@@ -23,7 +23,12 @@ import {
   Crown,
   Zap,
   DollarSign,
-  TrendingDown
+  TrendingDown,
+  Heart,
+  Star,
+  BookOpen,
+  Tag,
+  Globe
 } from 'lucide-react';
 import {
   LineChart,
@@ -104,6 +109,24 @@ interface ProjectAnalytics {
     totalWritingTime: number;
     mostProductiveHour: number;
     consistencyScore: number;
+  };
+  romance?: {
+    genreBreakdown: Array<{ genre: string; books: number; words: number; revenue: number }>;
+    tropeUsage: Array<{ trope: string; count: number; popularity: number }>;
+    heatLevelDistribution: Array<{ level: number; count: number; avgRating: number }>;
+    seriesMetrics: {
+      totalSeries: number;
+      avgBooksPerSeries: number;
+      completionRate: number;
+    };
+    marketPerformance: {
+      bestsellers: number;
+      avgRating: number;
+      totalReviews: number;
+      readerEngagement: number;
+    };
+    characterDynamics: Array<{ type: string; count: number; successRate: number }>;
+    seasonalTrends: Array<{ month: string; sales: number; releases: number }>;
   };
 }
 
@@ -298,10 +321,14 @@ export default function AnalyticsPage() {
 
         {/* Main Analytics */}
         <Tabs defaultValue="progress" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 bg-white/50 dark:bg-slate-800/50 backdrop-blur">
+          <TabsList className="grid w-full grid-cols-5 bg-white/50 dark:bg-slate-800/50 backdrop-blur">
             <TabsTrigger value="progress" className="flex items-center gap-2" data-testid="tab-progress">
               <TrendingUp className="h-4 w-4" />
               Progress
+            </TabsTrigger>
+            <TabsTrigger value="romance" className="flex items-center gap-2" data-testid="tab-romance">
+              <Heart className="h-4 w-4" />
+              Romance
             </TabsTrigger>
             <TabsTrigger value="ai" className="flex items-center gap-2" data-testid="tab-ai">
               <Brain className="h-4 w-4" />
@@ -519,6 +546,175 @@ export default function AnalyticsPage() {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          <TabsContent value="romance" className="space-y-6">
+            {analytics.romance ? (
+              <>
+                {/* Romance Performance Overview */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <Card className="bg-gradient-to-br from-rose-50 to-pink-50 dark:from-rose-950/20 dark:to-pink-950/20 backdrop-blur border-rose-200 dark:border-rose-800">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                        Total Series
+                      </CardTitle>
+                      <BookOpen className="h-4 w-4 text-rose-600" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-rose-600 dark:text-rose-400">
+                        {analytics.romance.seriesMetrics.totalSeries}
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-400">
+                        Avg {analytics.romance.seriesMetrics.avgBooksPerSeries.toFixed(1)} books/series
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950/20 dark:to-pink-950/20 backdrop-blur border-purple-200 dark:border-purple-800">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                        Bestsellers
+                      </CardTitle>
+                      <Crown className="h-4 w-4 text-purple-600" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                        {analytics.romance.marketPerformance.bestsellers}
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-400">
+                        Top performing titles
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 backdrop-blur border-amber-200 dark:border-amber-800">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                        Avg Rating
+                      </CardTitle>
+                      <Star className="h-4 w-4 text-amber-600" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+                        {analytics.romance.marketPerformance.avgRating.toFixed(1)}
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-400">
+                        {analytics.romance.marketPerformance.totalReviews.toLocaleString()} reviews
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 backdrop-blur border-green-200 dark:border-green-800">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                        Engagement
+                      </CardTitle>
+                      <Users className="h-4 w-4 text-green-600" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                        {analytics.romance.marketPerformance.readerEngagement}%
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-400">
+                        Reader interaction rate
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Romance Analytics Charts */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Genre Performance */}
+                  <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur border-rose-200 dark:border-rose-800">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Heart className="h-5 w-5 text-rose-600" />
+                        Genre Performance
+                      </CardTitle>
+                      <CardDescription>
+                        Revenue and word count by romance subgenre
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={analytics.romance.genreBreakdown}>
+                          <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                          <XAxis 
+                            dataKey="genre" 
+                            className="text-xs"
+                            tick={{ fontSize: 10 }}
+                            angle={-45}
+                            textAnchor="end"
+                            height={80}
+                          />
+                          <YAxis className="text-xs" tick={{ fontSize: 12 }} />
+                          <Tooltip 
+                            contentStyle={{ 
+                              backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                              border: '1px solid #e2e8f0',
+                              borderRadius: '8px'
+                            }}
+                          />
+                          <Bar dataKey="revenue" fill="#f43f5e" name="Revenue" />
+                          <Bar dataKey="books" fill="#ec4899" name="Books" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+
+                  {/* Heat Level Distribution */}
+                  <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur border-orange-200 dark:border-orange-800">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Zap className="h-5 w-5 text-orange-600" />
+                        Heat Level Distribution
+                      </CardTitle>
+                      <CardDescription>
+                        Spice level preferences and ratings
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <PieChart>
+                          <Pie
+                            data={analytics.romance.heatLevelDistribution.map(item => ({
+                              ...item,
+                              name: `Level ${item.level}`,
+                              value: item.count
+                            }))}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={60}
+                            outerRadius={100}
+                            paddingAngle={5}
+                            dataKey="value"
+                          >
+                            {analytics.romance.heatLevelDistribution.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                </div>
+              </>
+            ) : (
+              <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur">
+                <CardContent className="flex items-center justify-center py-12">
+                  <div className="text-center">
+                    <Heart className="h-12 w-12 mx-auto mb-4 text-slate-400" />
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">
+                      Romance Analytics Coming Soon
+                    </h3>
+                    <p className="text-slate-600 dark:text-slate-400">
+                      Start writing romance content to see detailed genre analytics, trope usage, and market insights.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           <TabsContent value="ai" className="space-y-6">

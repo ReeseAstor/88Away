@@ -22,6 +22,11 @@ import {
   type CharacterDevelopmentRequest,
   type NarrativeFlowRequest
 } from "./openai";
+import { kdpService } from "./kdp-integration";
+import { stripeMarketplace } from "./stripe-marketplace";
+import multer from 'multer';
+import fs from 'fs';
+import path from 'path';
 import { AnalyticsService } from "./analytics";
 import { 
   insertProjectSchema,
@@ -131,7 +136,555 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Project routes
+  // Romance-specific API endpoints
+  
+  // Romance series management
+  app.get('/api/romance/series', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const series = await storage.getUserRomanceSeries(userId);
+      res.json(series);
+    } catch (error) {
+      console.error("Error fetching romance series:", error);
+      res.status(500).json({ message: "Failed to fetch romance series" });
+    }
+  });
+
+  app.post('/api/romance/series', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const seriesData = req.body;
+      const series = await storage.createRomanceSeries(seriesData, userId);
+      res.json(series);
+    } catch (error) {
+      console.error("Error creating romance series:", error);
+      res.status(500).json({ message: "Failed to create romance series" });
+    }
+  });
+
+  // Romance tropes management
+  app.get('/api/romance/tropes', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const tropes = await storage.getUserRomanceTropes(userId);
+      res.json(tropes);
+    } catch (error) {
+      console.error("Error fetching romance tropes:", error);
+      res.status(500).json({ message: "Failed to fetch romance tropes" });
+    }
+  });
+
+  app.post('/api/romance/tropes', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const tropeData = req.body;
+      const trope = await storage.createRomanceTrope(tropeData, userId);
+      res.json(trope);
+    } catch (error) {
+      console.error("Error creating romance trope:", error);
+      res.status(500).json({ message: "Failed to create romance trope" });
+    }
+  });
+
+  // Romance analytics
+  app.get('/api/romance/analytics/:projectId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const projectId = req.params.projectId;
+      const analytics = await AnalyticsService.getRomanceAnalytics(projectId, userId);
+      res.json(analytics);
+    } catch (error) {
+      console.error("Error fetching romance analytics:", error);
+      res.status(500).json({ message: "Failed to fetch romance analytics" });
+    }
+  });
+
+  // Romance market trends
+  app.get('/api/romance/market-trends', isAuthenticated, async (req: any, res) => {
+    try {
+      const timeframe = req.query.timeframe || 'quarter';
+      const region = req.query.region || 'global';
+      const trends = await storage.getRomanceMarketTrends(timeframe, region);
+      res.json(trends);
+    } catch (error) {
+      console.error("Error fetching market trends:", error);
+      res.status(500).json({ message: "Failed to fetch market trends" });
+    }
+  });
+
+  // Romance client portfolio
+  app.get('/api/romance/clients', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const clients = await storage.getRomanceClients(userId);
+      res.json(clients);
+    } catch (error) {
+      console.error("Error fetching romance clients:", error);
+      res.status(500).json({ message: "Failed to fetch romance clients" });
+    }
+  });
+
+  app.post('/api/romance/clients', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const clientData = req.body;
+      const client = await storage.createRomanceClient(clientData, userId);
+      res.json(client);
+    } catch (error) {
+      console.error("Error creating romance client:", error);
+      res.status(500).json({ message: "Failed to create romance client" });
+    }
+  });
+
+  // Romance publishing pipeline
+  app.post('/api/romance/covers', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const coverData = req.body;
+      const cover = await storage.createRomanceCover(coverData, userId);
+      res.json(cover);
+    } catch (error) {
+      console.error("Error creating romance cover:", error);
+      res.status(500).json({ message: "Failed to create romance cover" });
+    }
+  });
+
+  app.post('/api/romance/blurbs', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const blurbData = req.body;
+      const blurb = await storage.createRomanceBlurb(blurbData, userId);
+      res.json(blurb);
+    } catch (error) {
+      console.error("Error creating romance blurb:", error);
+      res.status(500).json({ message: "Failed to create romance blurb" });
+    }
+  });
+
+  // Romance revenue tracking
+  app.get('/api/romance/revenue', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const timeframe = req.query.timeframe || 'month';
+      const revenue = await storage.getRomanceRevenue(userId, timeframe);
+      res.json(revenue);
+    } catch (error) {
+      console.error("Error fetching romance revenue:", error);
+      res.status(500).json({ message: "Failed to fetch romance revenue" });
+    }
+  });
+
+  app.post('/api/romance/revenue', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const revenueData = req.body;
+      const revenue = await storage.createRevenueEntry(revenueData, userId);
+      res.json(revenue);
+    } catch (error) {
+      console.error("Error creating revenue entry:", error);
+      res.status(500).json({ message: "Failed to create revenue entry" });
+    }
+  });
+
+  // Existing routes continue...
+  
+  // Configure multer for file uploads
+  const upload = multer({
+    dest: 'uploads/',
+    limits: {
+      fileSize: 50 * 1024 * 1024, // 50MB limit
+    },
+    fileFilter: (req, file, cb) => {
+      // Allow images and PDFs for covers and manuscripts
+      if (file.mimetype.match(/^(image|application\/pdf)/)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Invalid file type'), false);
+      }
+    }
+  });
+
+  // KDP Integration routes
+  app.get('/api/kdp/credentials/validate', isAuthenticated, async (req: any, res) => {
+    try {
+      const isValid = await kdpService.validateCredentials();
+      res.json({ valid: isValid });
+    } catch (error) {
+      console.error('Error validating KDP credentials:', error);
+      res.status(500).json({ message: 'Failed to validate KDP credentials' });
+    }
+  });
+
+  app.post('/api/kdp/books', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { metadata, projectId } = req.body;
+
+      // Validate metadata
+      const validation = await kdpService.validateMetadata(metadata);
+      if (!validation.valid) {
+        return res.status(400).json({ errors: validation.errors });
+      }
+
+      // Create book on KDP
+      const result = await kdpService.createBook(metadata);
+      if (!result.success) {
+        return res.status(400).json({ errors: result.errors });
+      }
+
+      // Store metadata in our database
+      const kdpMetadata = await storage.createKDPMetadata({
+        projectId,
+        kdpBookId: result.bookId!,
+        status: 'draft',
+        metadata,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+
+      res.json({ bookId: result.bookId, metadata: kdpMetadata });
+    } catch (error) {
+      console.error('Error creating KDP book:', error);
+      res.status(500).json({ message: 'Failed to create KDP book' });
+    }
+  });
+
+  app.post('/api/kdp/books/:bookId/cover', isAuthenticated, upload.single('cover'), async (req: any, res) => {
+    try {
+      const { bookId } = req.params;
+      const { format } = req.body;
+      
+      if (!req.file) {
+        return res.status(400).json({ message: 'Cover file is required' });
+      }
+
+      const result = await kdpService.uploadCover(bookId, req.file.path, format);
+      
+      // Clean up uploaded file
+      fs.unlinkSync(req.file.path);
+
+      if (!result.success) {
+        return res.status(400).json({ errors: result.errors });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error uploading cover:', error);
+      if (req.file) {
+        fs.unlinkSync(req.file.path);
+      }
+      res.status(500).json({ message: 'Failed to upload cover' });
+    }
+  });
+
+  app.post('/api/kdp/books/:bookId/manuscript', isAuthenticated, upload.single('manuscript'), async (req: any, res) => {
+    try {
+      const { bookId } = req.params;
+      
+      if (!req.file) {
+        return res.status(400).json({ message: 'Manuscript file is required' });
+      }
+
+      const result = await kdpService.uploadManuscript(bookId, req.file.path);
+      
+      // Clean up uploaded file
+      fs.unlinkSync(req.file.path);
+
+      if (!result.success) {
+        return res.status(400).json({ errors: result.errors });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error uploading manuscript:', error);
+      if (req.file) {
+        fs.unlinkSync(req.file.path);
+      }
+      res.status(500).json({ message: 'Failed to upload manuscript' });
+    }
+  });
+
+  app.put('/api/kdp/books/:bookId/pricing', isAuthenticated, async (req: any, res) => {
+    try {
+      const { bookId } = req.params;
+      const { pricing } = req.body;
+
+      const result = await kdpService.setPricing(bookId, pricing);
+      
+      if (!result.success) {
+        return res.status(400).json({ errors: result.errors });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error setting pricing:', error);
+      res.status(500).json({ message: 'Failed to set pricing' });
+    }
+  });
+
+  app.post('/api/kdp/books/:bookId/submit', isAuthenticated, async (req: any, res) => {
+    try {
+      const { bookId } = req.params;
+
+      const result = await kdpService.submitForReview(bookId);
+      
+      if (!result.success) {
+        return res.status(400).json({ errors: result.errors });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error submitting for review:', error);
+      res.status(500).json({ message: 'Failed to submit for review' });
+    }
+  });
+
+  app.get('/api/kdp/books/:bookId/status', isAuthenticated, async (req: any, res) => {
+    try {
+      const { bookId } = req.params;
+
+      const status = await kdpService.getPublishingStatus(bookId);
+      
+      if (!status) {
+        return res.status(404).json({ message: 'Book not found' });
+      }
+
+      res.json(status);
+    } catch (error) {
+      console.error('Error getting book status:', error);
+      res.status(500).json({ message: 'Failed to get book status' });
+    }
+  });
+
+  app.get('/api/kdp/books/:bookId/sales', isAuthenticated, async (req: any, res) => {
+    try {
+      const { bookId } = req.params;
+      const { startDate, endDate } = req.query;
+
+      const start = new Date(startDate as string);
+      const end = new Date(endDate as string);
+
+      const salesData = await kdpService.getSalesData(bookId, start, end);
+      
+      if (!salesData) {
+        return res.status(404).json({ message: 'Sales data not available' });
+      }
+
+      res.json(salesData);
+    } catch (error) {
+      console.error('Error getting sales data:', error);
+      res.status(500).json({ message: 'Failed to get sales data' });
+    }
+  });
+
+  app.get('/api/kdp/cover-requirements/:format', isAuthenticated, async (req: any, res) => {
+    try {
+      const { format } = req.params;
+      
+      if (format !== 'ebook' && format !== 'paperback') {
+        return res.status(400).json({ message: 'Invalid format. Must be "ebook" or "paperback"' });
+      }
+
+      const requirements = await kdpService.getCoverRequirements(format);
+      res.json(requirements);
+    } catch (error) {
+      console.error('Error getting cover requirements:', error);
+      res.status(500).json({ message: 'Failed to get cover requirements' });
+    }
+  });
+
+  app.post('/api/kdp/keywords/optimize', isAuthenticated, async (req: any, res) => {
+    try {
+      const { genre, subgenres, tropes } = req.body;
+
+      const keywords = await kdpService.generateOptimizedKeywords(genre, subgenres, tropes);
+      res.json({ keywords });
+    } catch (error) {
+      console.error('Error optimizing keywords:', error);
+      res.status(500).json({ message: 'Failed to optimize keywords' });
+    }
+  });
+
+  app.get('/api/kdp/projects/:projectId/metadata', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { projectId } = req.params;
+
+      // Verify project access
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ message: 'Project not found' });
+      }
+
+      const hasAccess = project.ownerId === userId || 
+        project.collaborators.some(c => c.userId === userId);
+      
+      if (!hasAccess) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+
+      const metadata = await storage.getProjectKDPMetadata(projectId);
+      res.json(metadata);
+    } catch (error) {
+      console.error('Error getting project KDP metadata:', error);
+      res.status(500).json({ message: 'Failed to get KDP metadata' });
+    }
+  });
+
+  // Stripe Marketplace routes
+  app.post('/api/marketplace/connect', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user?.email) {
+        return res.status(400).json({ message: 'User email is required' });
+      }
+
+      const { businessType } = req.body;
+      const result = await stripeMarketplace.createConnectedAccount(user.email, businessType);
+      
+      // Store account ID in user record
+      await storage.updateUser(userId, { stripeAccountId: result.accountId });
+      
+      res.json(result);
+    } catch (error) {
+      console.error('Error creating connected account:', error);
+      res.status(500).json({ message: 'Failed to create connected account' });
+    }
+  });
+
+  app.post('/api/marketplace/products', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const productData = req.body;
+      
+      const product = await stripeMarketplace.createProduct({
+        ...productData,
+        metadata: {
+          ...productData.metadata,
+          authorId: userId,
+        },
+      });
+      
+      res.json(product);
+    } catch (error) {
+      console.error('Error creating marketplace product:', error);
+      res.status(500).json({ message: 'Failed to create product' });
+    }
+  });
+
+  app.post('/api/marketplace/prices', isAuthenticated, async (req: any, res) => {
+    try {
+      const priceData = req.body;
+      const price = await stripeMarketplace.createPrice(priceData);
+      res.json(price);
+    } catch (error) {
+      console.error('Error creating price:', error);
+      res.status(500).json({ message: 'Failed to create price' });
+    }
+  });
+
+  app.post('/api/marketplace/checkout', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const {
+        priceId,
+        sellerId,
+        sellerAccountId,
+        successUrl,
+        cancelUrl,
+        metadata,
+      } = req.body;
+      
+      const feeStructure = await stripeMarketplace.getMarketplaceFeeStructure();
+      
+      const session = await stripeMarketplace.createCheckoutSession({
+        priceId,
+        buyerId: userId,
+        sellerId,
+        sellerAccountId,
+        platformFeePercent: feeStructure.platformFeePercent,
+        successUrl,
+        cancelUrl,
+        metadata,
+      });
+      
+      res.json(session);
+    } catch (error) {
+      console.error('Error creating checkout session:', error);
+      res.status(500).json({ message: 'Failed to create checkout session' });
+    }
+  });
+
+  app.post('/api/marketplace/webhook', async (req: any, res) => {
+    try {
+      const signature = req.headers['stripe-signature'];
+      const payload = req.body;
+      
+      await stripeMarketplace.handleWebhook(payload, signature);
+      res.json({ received: true });
+    } catch (error) {
+      console.error('Error handling webhook:', error);
+      res.status(400).json({ message: 'Webhook error' });
+    }
+  });
+
+  app.get('/api/marketplace/analytics/:sellerId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { sellerId } = req.params;
+      const { period } = req.query;
+      
+      // Check if user can access this seller's analytics
+      if (userId !== sellerId) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+      
+      const analytics = await stripeMarketplace.getSellerAnalytics(
+        sellerId,
+        period as 'week' | 'month' | 'year'
+      );
+      
+      res.json(analytics);
+    } catch (error) {
+      console.error('Error getting seller analytics:', error);
+      res.status(500).json({ message: 'Failed to get analytics' });
+    }
+  });
+
+  app.post('/api/marketplace/refund', isAuthenticated, async (req: any, res) => {
+    try {
+      const { paymentIntentId, amount } = req.body;
+      const refund = await stripeMarketplace.createRefund(paymentIntentId, amount);
+      res.json(refund);
+    } catch (error) {
+      console.error('Error creating refund:', error);
+      res.status(500).json({ message: 'Failed to create refund' });
+    }
+  });
+
+  app.get('/api/marketplace/fees/calculate', isAuthenticated, async (req: any, res) => {
+    try {
+      const { amount } = req.query;
+      const fees = await stripeMarketplace.calculateFees(parseInt(amount as string));
+      res.json(fees);
+    } catch (error) {
+      console.error('Error calculating fees:', error);
+      res.status(500).json({ message: 'Failed to calculate fees' });
+    }
+  });
+
+  app.get('/api/marketplace/fees/structure', isAuthenticated, async (req: any, res) => {
+    try {
+      const feeStructure = await stripeMarketplace.getMarketplaceFeeStructure();
+      res.json(feeStructure);
+    } catch (error) {
+      console.error('Error getting fee structure:', error);
+      res.status(500).json({ message: 'Failed to get fee structure' });
+    }
+  });
+
   app.get('/api/projects', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;

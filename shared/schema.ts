@@ -65,18 +65,171 @@ export const characterRoleEnum = pgEnum('character_role', [
   'other'
 ]);
 
+// Romance-specific enums
+export const romanceHeatLevelEnum = pgEnum('romance_heat_level', [
+  'sweet', 'warm', 'steamy', 'scorching'
+]);
+
+export const romanceSubgenreEnum = pgEnum('romance_subgenre', [
+  'contemporary', 'historical', 'paranormal', 'fantasy', 'sci_fi', 
+  'romantic_suspense', 'military', 'sports', 'billionaire', 'small_town',
+  'second_chance', 'enemies_to_lovers', 'fake_relationship', 'single_parent'
+]);
+
+export const publicationStatusEnum = pgEnum('publication_status', [
+  'draft', 'in_progress', 'ready_for_review', 'approved', 
+  'formatted', 'published', 'archived'
+]);
+
+export const relationshipTypeEnum = pgEnum('relationship_type', [
+  'romantic_interest', 'ex_lover', 'family', 'friend', 'rival', 
+  'mentor', 'ally', 'enemy', 'colleague'
+]);
+
 // Projects table
 export const projects = pgTable("projects", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   title: varchar("title").notNull(),
   description: text("description"),
   genre: varchar("genre"),
+  // Romance-specific fields
+  romanceSubgenre: romanceSubgenreEnum("romance_subgenre"),
+  heatLevel: romanceHeatLevelEnum("heat_level"),
+  tropeTags: text("trope_tags").array(), // Array of romance trope tags
+  seriesId: varchar("series_id").references(() => romanceSeries.id),
+  bookNumber: integer("book_number"), // Position in series
   targetWordCount: integer("target_word_count"),
   currentWordCount: integer("current_word_count").default(0),
   deadline: timestamp("deadline"),
+  publicationStatus: publicationStatusEnum("publication_status").default('draft'),
   ownerId: varchar("owner_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Romance Series table for multi-book series management
+export const romanceSeries = pgTable("romance_series", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: varchar("title").notNull(),
+  description: text("description"),
+  subgenre: romanceSubgenreEnum("subgenre"),
+  heatLevel: romanceHeatLevelEnum("heat_level"),
+  plannedBooks: integer("planned_books"),
+  publishedBooks: integer("published_books").default(0),
+  seriesArc: text("series_arc"), // Overall series storyline
+  ownerId: varchar("owner_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Romance Tropes tracking table
+export const romanceTropes = pgTable("romance_tropes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  tropeName: varchar("trope_name").notNull(),
+  category: varchar("category").notNull(), // relationship, plot, character, setting
+  description: text("description"),
+  isCore: boolean("is_core").default(false), // Core vs secondary trope
+  conflictsWith: text("conflicts_with").array(), // Array of conflicting trope names
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Character Relationships for romance dynamics
+export const characterRelationships = pgTable("character_relationships", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  character1Id: varchar("character1_id").notNull().references(() => characters.id, { onDelete: 'cascade' }),
+  character2Id: varchar("character2_id").notNull().references(() => characters.id, { onDelete: 'cascade' }),
+  relationshipType: relationshipTypeEnum("relationship_type").notNull(),
+  intensity: integer("intensity").default(5), // 1-10 scale
+  dynamics: text("dynamics"), // Description of relationship dynamics
+  tension: text("tension"), // Types of tension (sexual, romantic, conflict)
+  development: text("development"), // How relationship evolves
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Cover Designs for publishing pipeline
+export const coverDesigns = pgTable("cover_designs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  title: varchar("title").notNull(),
+  imageUrl: varchar("image_url"),
+  designData: jsonb("design_data"), // Design parameters and settings
+  isSelected: boolean("is_selected").default(false),
+  version: integer("version").default(1),
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Blurbs/Marketing Copy for books
+export const bookBlurbs = pgTable("book_blurbs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  type: varchar("type").notNull(), // back_cover, amazon_description, short_pitch
+  content: text("content").notNull(),
+  version: integer("version").default(1),
+  isActive: boolean("is_active").default(false),
+  keywords: text("keywords").array(), // SEO keywords
+  hooks: text("hooks").array(), // Marketing hooks
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// KDP Publishing Metadata
+export const kdpMetadata = pgTable("kdp_metadata", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  asin: varchar("asin"), // Amazon Standard Identification Number
+  categories: text("categories").array(),
+  keywords: text("keywords").array(),
+  price: integer("price"), // Price in cents
+  royaltyRate: integer("royalty_rate"), // Percentage
+  territories: text("territories").array(), // Publishing territories
+  drm: boolean("drm").default(false),
+  publishingRights: varchar("publishing_rights"),
+  ageGuidance: varchar("age_guidance"),
+  publicationDate: timestamp("publication_date"),
+  lastSynced: timestamp("last_synced"),
+  kdpStatus: varchar("kdp_status"), // live, in_review, blocked, etc.
+  salesData: jsonb("sales_data"), // Sales metrics from KDP
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Client Portfolios for enterprise/agency management
+export const clientPortfolios = pgTable("client_portfolios", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  agencyId: varchar("agency_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  clientId: varchar("client_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  contractType: varchar("contract_type"), // ghostwriting, editing, publishing
+  retainerAmount: integer("retainer_amount"), // Monthly retainer in cents
+  commissionRate: integer("commission_rate"), // Percentage
+  activeProjects: integer("active_projects").default(0),
+  totalRevenue: integer("total_revenue").default(0), // Total revenue in cents
+  status: varchar("status").default('active'), // active, paused, completed
+  contractStart: timestamp("contract_start"),
+  contractEnd: timestamp("contract_end"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Revenue Tracking for detailed financial analytics
+export const revenueEntries = pgTable("revenue_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").references(() => projects.id, { onDelete: 'cascade' }),
+  clientPortfolioId: varchar("client_portfolio_id").references(() => clientPortfolios.id),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  amount: integer("amount").notNull(), // Amount in cents
+  currency: varchar("currency").default('USD'),
+  source: varchar("source").notNull(), // kdp, client_payment, retainer, etc.
+  description: text("description"),
+  transactionDate: timestamp("transaction_date").notNull(),
+  metadata: jsonb("metadata"), // Additional transaction details
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Project collaborators
@@ -102,6 +255,14 @@ export const characters = pgTable("characters", {
   role: characterRoleEnum("role"),
   importance: integer("importance").default(3),
   tags: text("tags").array(),
+  // Romance-specific character fields
+  romanticArchetype: varchar("romantic_archetype"), // alpha, beta, cinnamon_roll, etc.
+  attractionFactors: text("attraction_factors").array(), // What makes them attractive
+  romanticGoals: text("romantic_goals"), // What they want in love
+  romanticConflicts: text("romantic_conflicts"), // Internal romantic conflicts
+  pastRelationships: text("past_relationships"), // Relationship history
+  lovestyle: varchar("lovestyle"), // How they express/receive love
+  intimacyComfort: integer("intimacy_comfort").default(5), // 1-10 comfort with intimacy
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -469,10 +630,111 @@ export const projectCollaboratorsRelations = relations(projectCollaborators, ({ 
   }),
 }));
 
-export const charactersRelations = relations(characters, ({ one }) => ({
+export const charactersRelations = relations(characters, ({ one, many }) => ({
   project: one(projects, {
     fields: [characters.projectId],
     references: [projects.id],
+  }),
+  // Romance relationship connections
+  relationshipsAsCharacter1: many(characterRelationships, { relationName: 'Character1Relationships' }),
+  relationshipsAsCharacter2: many(characterRelationships, { relationName: 'Character2Relationships' }),
+}));
+
+// Romance Series Relations
+export const romanceSeriesRelations = relations(romanceSeries, ({ one, many }) => ({
+  owner: one(users, {
+    fields: [romanceSeries.ownerId],
+    references: [users.id],
+  }),
+  books: many(projects),
+}));
+
+// Romance Tropes Relations
+export const romanceTropesRelations = relations(romanceTropes, ({ one }) => ({
+  project: one(projects, {
+    fields: [romanceTropes.projectId],
+    references: [projects.id],
+  }),
+}));
+
+// Character Relationships Relations
+export const characterRelationshipsRelations = relations(characterRelationships, ({ one }) => ({
+  project: one(projects, {
+    fields: [characterRelationships.projectId],
+    references: [projects.id],
+  }),
+  character1: one(characters, {
+    fields: [characterRelationships.character1Id],
+    references: [characters.id],
+    relationName: 'Character1Relationships',
+  }),
+  character2: one(characters, {
+    fields: [characterRelationships.character2Id],
+    references: [characters.id],
+    relationName: 'Character2Relationships',
+  }),
+}));
+
+// Cover Designs Relations
+export const coverDesignsRelations = relations(coverDesigns, ({ one }) => ({
+  project: one(projects, {
+    fields: [coverDesigns.projectId],
+    references: [projects.id],
+  }),
+  createdBy: one(users, {
+    fields: [coverDesigns.createdBy],
+    references: [users.id],
+  }),
+}));
+
+// Book Blurbs Relations
+export const bookBlurbsRelations = relations(bookBlurbs, ({ one }) => ({
+  project: one(projects, {
+    fields: [bookBlurbs.projectId],
+    references: [projects.id],
+  }),
+  createdBy: one(users, {
+    fields: [bookBlurbs.createdBy],
+    references: [users.id],
+  }),
+}));
+
+// KDP Metadata Relations
+export const kdpMetadataRelations = relations(kdpMetadata, ({ one }) => ({
+  project: one(projects, {
+    fields: [kdpMetadata.projectId],
+    references: [projects.id],
+  }),
+}));
+
+// Client Portfolios Relations
+export const clientPortfoliosRelations = relations(clientPortfolios, ({ one, many }) => ({
+  agency: one(users, {
+    fields: [clientPortfolios.agencyId],
+    references: [users.id],
+    relationName: 'AgencyToClient',
+  }),
+  client: one(users, {
+    fields: [clientPortfolios.clientId],
+    references: [users.id],
+    relationName: 'ClientToAgency',
+  }),
+  revenueEntries: many(revenueEntries),
+}));
+
+// Revenue Entries Relations
+export const revenueEntriesRelations = relations(revenueEntries, ({ one }) => ({
+  project: one(projects, {
+    fields: [revenueEntries.projectId],
+    references: [projects.id],
+  }),
+  clientPortfolio: one(clientPortfolios, {
+    fields: [revenueEntries.clientPortfolioId],
+    references: [clientPortfolios.id],
+  }),
+  user: one(users, {
+    fields: [revenueEntries.userId],
+    references: [users.id],
   }),
 }));
 
@@ -711,6 +973,54 @@ export const insertProjectSchema = createInsertSchema(projects).omit({
   updatedAt: true,
 });
 
+// Romance-specific insert schemas
+export const insertRomanceSeriesSchema = createInsertSchema(romanceSeries).omit({
+  id: true,
+  publishedBooks: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertRomanceTropeSchema = createInsertSchema(romanceTropes).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCharacterRelationshipSchema = createInsertSchema(characterRelationships).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCoverDesignSchema = createInsertSchema(coverDesigns).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertBookBlurbSchema = createInsertSchema(bookBlurbs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertKdpMetadataSchema = createInsertSchema(kdpMetadata).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertClientPortfolioSchema = createInsertSchema(clientPortfolios).omit({
+  id: true,
+  activeProjects: true,
+  totalRevenue: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertRevenueEntrySchema = createInsertSchema(revenueEntries).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertCharacterSchema = createInsertSchema(characters).omit({
   id: true,
   createdAt: true,
@@ -851,6 +1161,24 @@ export type WritingSession = typeof writingSessions.$inferSelect;
 export type InsertActivityLog = z.infer<typeof insertActivityLogSchema>;
 export type ActivityLog = typeof activityLogs.$inferSelect;
 
+// Romance-specific types
+export type InsertRomanceSeries = z.infer<typeof insertRomanceSeriesSchema>;
+export type RomanceSeries = typeof romanceSeries.$inferSelect;
+export type InsertRomanceTrope = z.infer<typeof insertRomanceTropeSchema>;
+export type RomanceTrope = typeof romanceTropes.$inferSelect;
+export type InsertCharacterRelationship = z.infer<typeof insertCharacterRelationshipSchema>;
+export type CharacterRelationship = typeof characterRelationships.$inferSelect;
+export type InsertCoverDesign = z.infer<typeof insertCoverDesignSchema>;
+export type CoverDesign = typeof coverDesigns.$inferSelect;
+export type InsertBookBlurb = z.infer<typeof insertBookBlurbSchema>;
+export type BookBlurb = typeof bookBlurbs.$inferSelect;
+export type InsertKdpMetadata = z.infer<typeof insertKdpMetadataSchema>;
+export type KdpMetadata = typeof kdpMetadata.$inferSelect;
+export type InsertClientPortfolio = z.infer<typeof insertClientPortfolioSchema>;
+export type ClientPortfolio = typeof clientPortfolios.$inferSelect;
+export type InsertRevenueEntry = z.infer<typeof insertRevenueEntrySchema>;
+export type RevenueEntry = typeof revenueEntries.$inferSelect;
+
 // Collaboration types
 export type DocumentCollaborationState = typeof documentCollaborationStates.$inferSelect;
 export type InsertDocumentComment = z.infer<typeof insertDocumentCommentSchema>;
@@ -897,6 +1225,46 @@ export type ProjectWithCollaborators = Project & {
   worldbuildingEntries: WorldbuildingEntry[];
   timelineEvents: TimelineEvent[];
   documents: Document[];
+  // Romance-specific relations
+  series?: RomanceSeries | null;
+  tropes: RomanceTrope[];
+  characterRelationships: CharacterRelationship[];
+  coverDesigns: CoverDesign[];
+  bookBlurbs: BookBlurb[];
+  kdpMetadata: KdpMetadata[];
+};
+
+// Enhanced Character type with relationships
+export type CharacterWithRelationships = Character & {
+  relationshipsAsCharacter1: (CharacterRelationship & {
+    character2: Character;
+  })[];
+  relationshipsAsCharacter2: (CharacterRelationship & {
+    character1: Character;
+  })[];
+};
+
+// Romance Series with books
+export type RomanceSeriesWithBooks = RomanceSeries & {
+  books: Project[];
+  owner: User;
+};
+
+// Client Portfolio with revenue data
+export type ClientPortfolioWithRevenue = ClientPortfolio & {
+  agency: User;
+  client: User;
+  revenueEntries: RevenueEntry[];
+};
+
+// Enterprise dashboard types
+export type EnterpriseMetrics = {
+  totalClients: number;
+  activeProjects: number;
+  monthlyRevenue: number;
+  completedBooks: number;
+  averageProjectDuration: number;
+  topGenres: { genre: string; count: number }[];
 };
 
 export type DocumentWithVersions = Document & {
