@@ -2571,6 +2571,204 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // OCR Routes
+  app.post('/api/ocr/extract', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { imageUrl, imageBase64, expertMode, extractTables, extractFormatting, language, projectId } = req.body;
+
+      // Validate input
+      if (!imageUrl && !imageBase64) {
+        return res.status(400).json({ message: "Either imageUrl or imageBase64 must be provided" });
+      }
+
+      // Check user's AI usage limits
+      const user = await storage.getUser(userId);
+      const plan = user?.subscriptionPlan || 'free';
+      const usageCount = await storage.getUserAIUsageCount(userId);
+      
+      const { AI_LIMITS } = await import("./openai");
+      const limit = AI_LIMITS[plan as keyof typeof AI_LIMITS].monthly_generations;
+      
+      if (limit !== -1 && usageCount >= limit) {
+        return res.status(403).json({ 
+          message: `Monthly AI usage limit reached (${limit} generations). Please upgrade your plan.`,
+          requiresUpgrade: true
+        });
+      }
+
+      // Perform OCR
+      const { performOCR } = await import("./ocr");
+      const result = await performOCR({
+        imageUrl,
+        imageBase64,
+        expertMode,
+        extractTables,
+        extractFormatting,
+        language
+      });
+
+      // Store OCR result
+      if (projectId) {
+        await storage.createOCRRecord({
+          userId,
+          projectId,
+          expertMode,
+          extractedText: result.text,
+          metadata: result.metadata
+        });
+      }
+
+      // Increment AI usage
+      await storage.incrementAIUsage(userId, projectId || null, 'ocr');
+
+      res.json(result);
+    } catch (error) {
+      console.error("OCR extraction failed:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to extract text from image" 
+      });
+    }
+  });
+
+  app.post('/api/ocr/batch', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { requests, projectId } = req.body;
+
+      if (!Array.isArray(requests) || requests.length === 0) {
+        return res.status(400).json({ message: "Requests array is required" });
+      }
+
+      if (requests.length > 10) {
+        return res.status(400).json({ message: "Maximum 10 images per batch" });
+      }
+
+      // Check user's AI usage limits
+      const user = await storage.getUser(userId);
+      const plan = user?.subscriptionPlan || 'free';
+      const usageCount = await storage.getUserAIUsageCount(userId);
+      
+      const { AI_LIMITS } = await import("./openai");
+      const limit = AI_LIMITS[plan as keyof typeof AI_LIMITS].monthly_generations;
+      
+      if (limit !== -1 && usageCount + requests.length > limit) {
+        return res.status(403).json({ 
+          message: `Batch would exceed monthly AI usage limit (${limit} generations). Please upgrade your plan.`,
+          requiresUpgrade: true
+        });
+      }
+
+      // Perform batch OCR
+      const { performBatchOCR } = await import("./ocr");
+      const results = await performBatchOCR(requests);
+
+      // Store successful OCR results
+      if (projectId) {
+        for (const result of results) {
+          if (result.success) {
+            await storage.createOCRRecord({
+              userId,
+              projectId,
+              expertMode: result.metadata.expertMode,
+              extractedText: result.text,
+              metadata: result.metadata
+            });
+          }
+        }
+      }
+
+      // Increment AI usage for each request
+      for (let i = 0; i < requests.length; i++) {
+        await storage.incrementAIUsage(userId, projectId || null, 'ocr');
+      }
+
+      res.json({ results });
+    } catch (error) {
+      console.error("Batch OCR failed:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to process batch OCR" 
+      });
+    }
+  });
+
+  app.get('/api/ocr/history', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { projectId, limit = 50 } = req.query;
+
+      const history = await storage.getOCRHistory(userId, projectId, parseInt(limit as string));
+      res.json(history);
+    } catch (error) {
+      console.error("Failed to fetch OCR history:", error);
+      res.status(500).json({ message: "Failed to fetch OCR history" });
+    }
+  });
+
+  app.get('/api/expert-modes', isAuthenticated, async (req: any, res) => {
+    try {
+      const { getAllLanguagePackages } = await import("./languages");
+      const packages = getAllLanguagePackages();
+      
+      // Return simplified package info
+      const simplified = packages.map(pkg => ({
+        mode: pkg.mode,
+        displayName: pkg.displayName,
+        description: pkg.description,
+        terminology: {
+          commonCount: pkg.terminology.common.length,
+          advancedCount: pkg.terminology.advanced.length,
+          examples: pkg.terminology.common.slice(0, 5)
+        }
+      }));
+
+      res.json(simplified);
+    } catch (error) {
+      console.error("Failed to fetch expert modes:", error);
+      res.status(500).json({ message: "Failed to fetch expert modes" });
+    }
+  });
+
+  app.post('/api/expert-modes/validate', isAuthenticated, async (req: any, res) => {
+    try {
+      const { text, mode } = req.body;
+
+      if (!text || !mode) {
+        return res.status(400).json({ message: "Text and mode are required" });
+      }
+
+      const { validateExpertModeText } = await import("./languages");
+      const validation = validateExpertModeText(text, mode);
+
+      res.json(validation);
+    } catch (error) {
+      console.error("Text validation failed:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to validate text" 
+      });
+    }
+  });
+
+  app.post('/api/expert-modes/enhance', isAuthenticated, async (req: any, res) => {
+    try {
+      const { text, mode } = req.body;
+
+      if (!text || !mode) {
+        return res.status(400).json({ message: "Text and mode are required" });
+      }
+
+      const { enhanceForExpertMode } = await import("./languages");
+      const enhanced = enhanceForExpertMode(text, mode);
+
+      res.json({ enhanced });
+    } catch (error) {
+      console.error("Text enhancement failed:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to enhance text" 
+      });
+    }
+  });
+
   // Advanced Analysis Routes
   app.post('/api/projects/:id/analysis/style', isAuthenticated, async (req: any, res) => {
     try {
