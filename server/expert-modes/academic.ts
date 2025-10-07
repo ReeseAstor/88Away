@@ -50,7 +50,7 @@ export class AcademicExpert {
       entities.push(...citationMatches);
     }
 
-    return [...new Set(entities)].slice(0, 10);
+    return Array.from(new Set(entities)).slice(0, 10);
   }
 
   private static extractKeyPoints(text: string, patterns: any): string[] {

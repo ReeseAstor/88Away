@@ -57,7 +57,7 @@ export class FinanceExpert {
       entities.push(...financialMatches);
     }
 
-    return [...new Set(entities)].slice(0, 10);
+    return Array.from(new Set(entities)).slice(0, 10);
   }
 
   private static extractKeyPoints(text: string, patterns: any): string[] {

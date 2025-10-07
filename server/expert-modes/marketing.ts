@@ -13,7 +13,7 @@ export class MarketingExpert {
       channels: /\b(social\s+media|email|SEO|SEM|PPC|content|blog|website|mobile|app|TV|radio|print|outdoor|influencer|affiliate|partnership)\b/i,
       demographics: /\b(demographic|age|gender|income|education|location|geographic|psychographic|behavioral|lifestyle|persona|segment)\b/i,
       strategies: /\b(content\s+marketing|inbound|outbound|push|pull|viral|guerrilla|sniper|relationship|experiential|cause|green|sustainable)\b/i,
-      analysis: /\b(SWAOT|analysis|research|study|survey|focus\s+group|interview|A/B\s+test|split\s+test|multivariate|analytics|insights)\b/i,
+      analysis: /\b(SWOT|analysis|research|study|survey|focus\s+group|interview|A\/B\s+test|split\s+test|multivariate|analytics|insights)\b/i,
       budgets: /\b(budget|spend|investment|cost|expense|allocation|media\s+buy|CPM|CPC|ROI)\b/i
     };
 
@@ -57,7 +57,7 @@ export class MarketingExpert {
       entities.push(...metricMatches);
     }
 
-    return [...new Set(entities)].slice(0, 10);
+    return Array.from(new Set(entities)).slice(0, 10);
   }
 
   private static extractKeyPoints(text: string, patterns: any): string[] {
