@@ -338,22 +338,56 @@ export class StripeMarketplaceService {
     chargesEnabled: boolean;
   }): Promise<void> {
     // Update database with account status
-    // This would integrate with your user/account storage
+    const metadata = {
+      detailsSubmitted: status.detailsSubmitted,
+      payoutsEnabled: status.payoutsEnabled,
+      chargesEnabled: status.chargesEnabled,
+      updatedAt: new Date().toISOString(),
+    };
+    
+    // Store in user metadata or separate table as needed
+    // This could be implemented with a specific user field for Stripe account status
   }
 
   private async saveSaleRecord(sale: Omit<MarketplaceSale, 'id'>): Promise<void> {
-    // Save to your database
-    // Implementation depends on your database schema
+    // Save to revenue entries table
+    await storage.createRevenueEntry({
+      amount: sale.sellerAmount,
+      currency: 'USD',
+      source: 'marketplace_sale',
+      description: `Marketplace sale for product ${sale.productId}`,
+      transactionDate: sale.createdAt,
+      metadata: {
+        productId: sale.productId,
+        buyerId: sale.buyerId,
+        platformFee: sale.platformFee,
+        totalAmount: sale.amount,
+        status: sale.status,
+      },
+    }, sale.sellerId);
   }
 
   private async updateAuthorRevenue(authorId: string, amount: number): Promise<void> {
-    // Update author revenue tracking
-    // Integration with your analytics system
+    // Create revenue entry for analytics
+    await storage.createRevenueEntry({
+      amount,
+      currency: 'USD',
+      source: 'author_revenue',
+      description: 'Revenue from marketplace sale',
+      transactionDate: new Date(),
+      metadata: {
+        type: 'marketplace',
+      },
+    }, authorId);
   }
 
   private async notifySeller(sellerId: string, sale: Omit<MarketplaceSale, 'id'>): Promise<void> {
     // Send notification to seller about new sale
-    // Integration with your notification system
+    // This would integrate with the notifications system
+    console.log(`New sale notification for seller ${sellerId}:`, {
+      amount: sale.sellerAmount,
+      productId: sale.productId,
+    });
   }
 
   private async getUserEmail(userId: string): Promise<string> {
@@ -363,8 +397,25 @@ export class StripeMarketplaceService {
 
   private async getSellerSales(sellerId: string, period: string): Promise<MarketplaceSale[]> {
     // Retrieve sales data from database
-    // This would be implemented based on your database schema
-    return [];
+    const revenueData = await storage.getRomanceRevenue(sellerId, period);
+    
+    // Transform revenue entries into MarketplaceSale format
+    const sales: MarketplaceSale[] = revenueData.entries
+      .filter((entry: any) => entry.source === 'marketplace_sale')
+      .map((entry: any) => ({
+        id: entry.id,
+        productId: entry.metadata?.productId || '',
+        buyerId: entry.metadata?.buyerId || '',
+        sellerId: sellerId,
+        amount: entry.metadata?.totalAmount || entry.amount,
+        platformFee: entry.metadata?.platformFee || 0,
+        sellerAmount: entry.amount,
+        status: entry.metadata?.status || 'completed',
+        createdAt: entry.transactionDate,
+        metadata: entry.metadata,
+      }));
+    
+    return sales;
   }
 
   private groupSalesByProduct(sales: MarketplaceSale[]): any[] {

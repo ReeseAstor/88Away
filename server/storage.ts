@@ -19,6 +19,8 @@ import {
   prompts,
   userFavoritePrompts,
   ocrRecords,
+  revenueEntries,
+  kdpMetadata,
   type User,
   type UpsertUser,
   type Project,
@@ -58,6 +60,8 @@ import {
   type UserFavoritePrompt,
   type OCRRecord,
   type InsertOCRRecord,
+  type RevenueEntry,
+  type InsertRevenueEntry,
 } from "@shared/schema";
 import { calculateWordCount } from "@shared/utils";
 import { db } from "./db";
@@ -209,6 +213,11 @@ export interface IStorage {
   // AI Usage tracking
   getUserAIUsageCount(userId: string): Promise<number>;
   incrementAIUsage(userId: string, projectId: string | null, type: string): Promise<void>;
+
+  // Revenue and monetization operations
+  createRevenueEntry(data: any, userId: string): Promise<any>;
+  getRomanceRevenue(userId: string, timeframe?: string): Promise<any>;
+  updateUser(userId: string, updates: Partial<User>): Promise<User>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1661,6 +1670,114 @@ export class DatabaseStorage implements IStorage {
       response: 'OCR processed',
       metadata: { type, timestamp: new Date() }
     });
+  }
+
+  // Revenue and monetization operations
+  async createRevenueEntry(data: InsertRevenueEntry, userId: string): Promise<RevenueEntry> {
+    const [entry] = await db.insert(revenueEntries)
+      .values({
+        ...data,
+        userId,
+        transactionDate: data.transactionDate || new Date(),
+      })
+      .returning();
+    return entry;
+  }
+
+  async getRomanceRevenue(userId: string, timeframe: string = 'month'): Promise<any> {
+    // Calculate date range based on timeframe
+    const now = new Date();
+    let startDate = new Date();
+    
+    switch (timeframe) {
+      case 'week':
+        startDate.setDate(now.getDate() - 7);
+        break;
+      case 'month':
+        startDate.setMonth(now.getMonth() - 1);
+        break;
+      case 'quarter':
+        startDate.setMonth(now.getMonth() - 3);
+        break;
+      case 'year':
+        startDate.setFullYear(now.getFullYear() - 1);
+        break;
+      default:
+        startDate.setMonth(now.getMonth() - 1);
+    }
+
+    // Get revenue entries
+    const entries = await db
+      .select()
+      .from(revenueEntries)
+      .where(
+        and(
+          eq(revenueEntries.userId, userId),
+          sql`${revenueEntries.transactionDate} >= ${startDate.toISOString()}`
+        )
+      )
+      .orderBy(desc(revenueEntries.transactionDate));
+
+    // Calculate totals
+    const totalRevenue = entries.reduce((sum, entry) => sum + (entry.amount || 0), 0);
+    const bookSales = entries
+      .filter(e => e.source === 'kdp' || e.source === 'book_sale')
+      .reduce((sum, entry) => sum + (entry.amount || 0), 0);
+    const royalties = entries
+      .filter(e => e.source === 'royalty')
+      .reduce((sum, entry) => sum + (entry.amount || 0), 0);
+    const subscriptions = entries
+      .filter(e => e.source === 'subscription')
+      .reduce((sum, entry) => sum + (entry.amount || 0), 0);
+
+    // Get project-specific revenue
+    const projectRevenue = await db
+      .select({
+        projectId: revenueEntries.projectId,
+        amount: sql<number>`sum(${revenueEntries.amount})`,
+        count: sql<number>`count(*)`,
+      })
+      .from(revenueEntries)
+      .where(
+        and(
+          eq(revenueEntries.userId, userId),
+          sql`${revenueEntries.transactionDate} >= ${startDate.toISOString()}`,
+          sql`${revenueEntries.projectId} IS NOT NULL`
+        )
+      )
+      .groupBy(revenueEntries.projectId);
+
+    // Get KDP sales data if available
+    const kdpData = await db
+      .select()
+      .from(kdpMetadata)
+      .innerJoin(projects, eq(kdpMetadata.projectId, projects.id))
+      .where(eq(projects.ownerId, userId));
+
+    return {
+      totalRevenue,
+      bookSales,
+      royalties,
+      subscriptions,
+      entries,
+      projectRevenue,
+      kdpData,
+      timeframe,
+      startDate,
+      endDate: now,
+    };
+  }
+
+  async updateUser(userId: string, updates: Partial<User>): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({
+        ...updates,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    return user;
   }
 }
 
