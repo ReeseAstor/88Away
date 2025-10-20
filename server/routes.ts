@@ -24,6 +24,8 @@ import {
 } from "./openai";
 import { kdpService } from "./kdp-integration";
 import { stripeMarketplace } from "./stripe-marketplace";
+import { subscriptionService } from "./subscription-service";
+import { checkUsageLimit, requireFeature, checkExportFormat } from "./subscription-middleware";
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
@@ -261,12 +263,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Romance revenue tracking
+  // Romance revenue tracking (enhanced)
+  
+  // Get revenue overview with analytics
   app.get('/api/romance/revenue', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const timeframe = req.query.timeframe || 'month';
-      const revenue = await storage.getRomanceRevenue(userId, timeframe);
+      const revenue = await storage.getRomanceRevenue(userId, timeframe as string);
       res.json(revenue);
     } catch (error) {
       console.error("Error fetching romance revenue:", error);
@@ -274,6 +278,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Create revenue entry
   app.post('/api/romance/revenue', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
@@ -283,6 +288,138 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error creating revenue entry:", error);
       res.status(500).json({ message: "Failed to create revenue entry" });
+    }
+  });
+
+  // Get detailed revenue analytics
+  app.get('/api/revenue/analytics', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { timeframe = 'month', groupBy = 'source' } = req.query;
+      
+      const revenueData = await storage.getRomanceRevenue(userId, timeframe as string);
+      
+      // Calculate analytics
+      const analytics = {
+        summary: {
+          totalRevenue: revenueData.totalRevenue,
+          bookSales: revenueData.bookSales,
+          royalties: revenueData.royalties,
+          subscriptions: revenueData.subscriptions,
+          averageTransaction: revenueData.entries.length > 0 
+            ? revenueData.totalRevenue / revenueData.entries.length 
+            : 0,
+          transactionCount: revenueData.entries.length,
+        },
+        bySource: {} as Record<string, { total: number; count: number; average: number }>,
+        byProject: revenueData.projectRevenue,
+        timeline: [] as any[],
+        growth: {
+          percentChange: 0,
+          trend: 'stable' as 'up' | 'down' | 'stable',
+        },
+      };
+
+      // Group by source
+      revenueData.entries.forEach((entry: any) => {
+        const source = entry.source || 'unknown';
+        if (!analytics.bySource[source]) {
+          analytics.bySource[source] = { total: 0, count: 0, average: 0 };
+        }
+        analytics.bySource[source].total += entry.amount || 0;
+        analytics.bySource[source].count += 1;
+      });
+
+      // Calculate averages
+      Object.keys(analytics.bySource).forEach(source => {
+        const data = analytics.bySource[source];
+        data.average = data.count > 0 ? data.total / data.count : 0;
+      });
+
+      // Build timeline
+      const entriesByDate = revenueData.entries.reduce((acc: any, entry: any) => {
+        const date = new Date(entry.transactionDate).toISOString().split('T')[0];
+        if (!acc[date]) {
+          acc[date] = { date, amount: 0, count: 0 };
+        }
+        acc[date].amount += entry.amount || 0;
+        acc[date].count += 1;
+        return acc;
+      }, {});
+      
+      analytics.timeline = Object.values(entriesByDate).sort((a: any, b: any) => 
+        new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
+
+      res.json(analytics);
+    } catch (error) {
+      console.error("Error fetching revenue analytics:", error);
+      res.status(500).json({ message: "Failed to fetch revenue analytics" });
+    }
+  });
+
+  // Get revenue by project
+  app.get('/api/revenue/by-project/:projectId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { projectId } = req.params;
+      const { timeframe = 'month' } = req.query;
+      
+      // Verify project ownership
+      const project = await storage.getProject(projectId);
+      if (!project || project.ownerId !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const revenueData = await storage.getRomanceRevenue(userId, timeframe as string);
+      const projectEntries = revenueData.entries.filter((e: any) => e.projectId === projectId);
+      const totalRevenue = projectEntries.reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
+
+      res.json({
+        projectId,
+        totalRevenue,
+        entries: projectEntries,
+        timeframe,
+      });
+    } catch (error) {
+      console.error("Error fetching project revenue:", error);
+      res.status(500).json({ message: "Failed to fetch project revenue" });
+    }
+  });
+
+  // Export revenue data
+  app.get('/api/revenue/export', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { timeframe = 'year', format = 'json' } = req.query;
+      
+      const revenueData = await storage.getRomanceRevenue(userId, timeframe as string);
+      
+      if (format === 'csv') {
+        // Convert to CSV format
+        const headers = ['Date', 'Source', 'Amount', 'Currency', 'Description'];
+        const rows = revenueData.entries.map((entry: any) => [
+          new Date(entry.transactionDate).toISOString(),
+          entry.source,
+          (entry.amount / 100).toFixed(2),
+          entry.currency || 'USD',
+          entry.description || '',
+        ]);
+        
+        const csv = [
+          headers.join(','),
+          ...rows.map((row: any[]) => row.map((cell: any) => `"${cell}"`).join(','))
+        ].join('\n');
+        
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename=revenue-${timeframe}.csv`);
+        res.send(csv);
+      } else {
+        res.json(revenueData);
+      }
+    } catch (error) {
+      console.error("Error exporting revenue data:", error);
+      res.status(500).json({ message: "Failed to export revenue data" });
     }
   });
 
@@ -630,6 +767,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Stripe subscription webhook handler
+  app.post('/api/subscription/webhook', express.raw({ type: 'application/json' }), async (req: any, res) => {
+    try {
+      const signature = req.headers['stripe-signature'] as string;
+      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
+      
+      if (!signature || !webhookSecret) {
+        return res.status(400).json({ message: 'Missing signature or webhook secret' });
+      }
+
+      // Construct Stripe event
+      const stripe = getStripeClient();
+      const event = stripe.webhooks.constructEvent(
+        req.body,
+        signature,
+        webhookSecret
+      );
+      
+      // Handle subscription webhook events
+      await subscriptionService.handleWebhook(event);
+      
+      res.json({ received: true });
+    } catch (error: any) {
+      console.error("Error handling subscription webhook:", error);
+      res.status(400).json({ message: error.message });
+    }
+  });
+
   app.get('/api/marketplace/analytics/:sellerId', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
@@ -720,7 +885,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/projects', isAuthenticated, async (req: any, res) => {
+  app.post('/api/projects', isAuthenticated, checkUsageLimit('projects'), async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const { template, ...projectData } = req.body;
@@ -2362,7 +2527,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // AI Assistant routes
-  app.post('/api/ai/generate', isAuthenticated, async (req: any, res) => {
+  app.post('/api/ai/generate', isAuthenticated, checkUsageLimit('aiSessions'), async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const { intent, persona, project_id, context_refs, params, userPrompt } = req.body;
@@ -3182,7 +3347,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Export route with multiple format support
-  app.get('/api/projects/:projectId/export', isAuthenticated, async (req: any, res) => {
+  app.get('/api/projects/:projectId/export', isAuthenticated, checkExportFormat, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const format = req.query.format || 'json'; // Default to JSON
@@ -4110,50 +4275,134 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Stripe subscription routes
-  app.get('/api/get-or-create-subscription', isAuthenticated, async (req: any, res) => {
-    const user = req.user;
-
-    if (user.stripeSubscriptionId) {
-      const stripeClient = getStripeClient();
-      const subscription = await stripeClient.subscriptions.retrieve(user.stripeSubscriptionId);
-
-      res.send({
-        subscriptionId: subscription.id,
-        clientSecret: subscription.latest_invoice && typeof subscription.latest_invoice === 'object' && 'payment_intent' in subscription.latest_invoice && subscription.latest_invoice.payment_intent && typeof subscription.latest_invoice.payment_intent === 'object' && 'client_secret' in subscription.latest_invoice.payment_intent ? subscription.latest_invoice.payment_intent.client_secret : undefined,
-      });
-
-      return;
-    }
-    
-    if (!user.email) {
-      throw new Error('No user email on file');
-    }
-
-    try {
-      const stripeClient = getStripeClient();
-      const customer = await stripeClient.customers.create({
-        email: user.email,
-        name: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
-      });
-
-      await storage.updateUserStripeInfo(user.claims.sub, customer.id, '');
-
-      const subscription = await stripeClient.subscriptions.create({
-        customer: customer.id,
-        items: [{
-          price: process.env.STRIPE_PRICE_ID,
-        }],
-        payment_behavior: 'default_incomplete',
-        expand: ['latest_invoice.payment_intent'],
-      });
-
-      await storage.updateUserStripeInfo(user.claims.sub, customer.id, subscription.id);
+  // Stripe subscription routes (enhanced)
   
-      res.send({
-        subscriptionId: subscription.id,
-        clientSecret: subscription.latest_invoice && typeof subscription.latest_invoice === 'object' && 'payment_intent' in subscription.latest_invoice && subscription.latest_invoice.payment_intent && typeof subscription.latest_invoice.payment_intent === 'object' && 'client_secret' in subscription.latest_invoice.payment_intent ? subscription.latest_invoice.payment_intent.client_secret : undefined,
-      });
+  // Get all available subscription plans
+  app.get('/api/subscription/plans', (req, res) => {
+    try {
+      const plans = subscriptionService.getPlans();
+      res.json(plans);
+    } catch (error: any) {
+      console.error("Error fetching plans:", error);
+      res.status(500).json({ message: "Failed to fetch subscription plans" });
+    }
+  });
+
+  // Get current subscription details
+  app.get('/api/subscription', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const details = await subscriptionService.getSubscription(userId);
+      res.json(details);
+    } catch (error: any) {
+      console.error("Error fetching subscription:", error);
+      res.status(500).json({ message: "Failed to fetch subscription details" });
+    }
+  });
+
+  // Create new subscription
+  app.post('/api/subscription/create', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { planId } = req.body;
+      
+      if (!planId) {
+        return res.status(400).json({ message: "Plan ID is required" });
+      }
+
+      const result = await subscriptionService.createSubscription(userId, planId);
+      res.json(result);
+    } catch (error: any) {
+      console.error("Error creating subscription:", error);
+      res.status(500).json({ message: error.message || "Failed to create subscription" });
+    }
+  });
+
+  // Update subscription (upgrade/downgrade)
+  app.put('/api/subscription/update', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { planId } = req.body;
+      
+      if (!planId) {
+        return res.status(400).json({ message: "Plan ID is required" });
+      }
+
+      const subscription = await subscriptionService.updateSubscription(userId, planId);
+      res.json(subscription);
+    } catch (error: any) {
+      console.error("Error updating subscription:", error);
+      res.status(500).json({ message: error.message || "Failed to update subscription" });
+    }
+  });
+
+  // Cancel subscription
+  app.post('/api/subscription/cancel', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { immediately } = req.body;
+      
+      const subscription = await subscriptionService.cancelSubscription(userId, immediately);
+      res.json(subscription);
+    } catch (error: any) {
+      console.error("Error canceling subscription:", error);
+      res.status(500).json({ message: error.message || "Failed to cancel subscription" });
+    }
+  });
+
+  // Reactivate canceled subscription
+  app.post('/api/subscription/reactivate', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const subscription = await subscriptionService.reactivateSubscription(userId);
+      res.json(subscription);
+    } catch (error: any) {
+      console.error("Error reactivating subscription:", error);
+      res.status(500).json({ message: error.message || "Failed to reactivate subscription" });
+    }
+  });
+
+  // Create billing portal session
+  app.post('/api/subscription/portal', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { returnUrl } = req.body;
+      
+      const url = await subscriptionService.createPortalSession(
+        userId, 
+        returnUrl || `${process.env.CLIENT_URL}/subscription`
+      );
+      res.json({ url });
+    } catch (error: any) {
+      console.error("Error creating portal session:", error);
+      res.status(500).json({ message: error.message || "Failed to create portal session" });
+    }
+  });
+
+  // Check usage limits
+  app.get('/api/subscription/usage/:limitType', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { limitType } = req.params;
+      
+      if (!['aiSessions', 'projects', 'collaborators'].includes(limitType)) {
+        return res.status(400).json({ message: "Invalid limit type" });
+      }
+
+      const usage = await subscriptionService.checkUsageLimit(userId, limitType as any);
+      res.json(usage);
+    } catch (error: any) {
+      console.error("Error checking usage:", error);
+      res.status(500).json({ message: "Failed to check usage limits" });
+    }
+  });
+
+  // Legacy endpoint (for backward compatibility)
+  app.get('/api/get-or-create-subscription', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const result = await subscriptionService.createSubscription(userId, 'professional');
+      res.json(result);
     } catch (error: any) {
       return res.status(400).send({ error: { message: error.message } });
     }
