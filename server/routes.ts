@@ -63,6 +63,7 @@ import {
   listUserSms,
   getSmsById,
 } from "./brevoSmsService";
+import realtimeRouter from './realtime-api';
 
 let stripe: Stripe | null = null;
 
@@ -79,6 +80,9 @@ function getStripeClient(): Stripe {
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
+
+  // Register real-time API routes
+  app.use(realtimeRouter);
 
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {

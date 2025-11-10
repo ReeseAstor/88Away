@@ -74,6 +74,7 @@
     "framer-motion": "^11.13.1",
     "html-pdf-node": "^1.0.8",
     "input-otp": "^1.4.2",
+    "ioredis": "^5.3.2",
     "lib0": "^0.2.114",
     "lucide-react": "^0.453.0",
     "memoizee": "^0.4.17",
