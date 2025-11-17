@@ -2,17 +2,42 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { ArrowLeft } from "lucide-react";
+import { Seo } from "@/components/seo";
 
 export default function PrivacyPage() {
+  const envBase =
+    (import.meta.env as { VITE_SITE_URL?: string })?.VITE_SITE_URL ??
+    "https://88away.com";
+  const siteUrl = envBase.endsWith("/") ? envBase.slice(0, -1) : envBase;
+
   return (
-    <div data-testid="page-privacy" className="min-h-screen bg-background">
-      <div className="container max-w-4xl mx-auto py-12 px-4">
-        <Link href="/">
-          <Button variant="ghost" className="mb-6" data-testid="button-back">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Home
-          </Button>
-        </Link>
+    <>
+      <Seo
+        title="Privacy Policy"
+        description="Learn how 88Away collects, stores, and protects your data across AI writing tools, collaboration features, and publishing workflows."
+        noindex
+        structuredData={{
+          "@context": "https://schema.org",
+          "@type": "PrivacyPolicy",
+          name: "88Away Privacy Policy",
+          url: `${siteUrl}/privacy`,
+          inLanguage: "en-US",
+          publisher: {
+            "@type": "Organization",
+            name: "88Away",
+            url: siteUrl,
+          },
+          dateModified: "2025-10-02",
+        }}
+        />
+        <div data-testid="page-privacy" className="min-h-screen bg-background">
+          <div className="container max-w-4xl mx-auto py-12 px-4">
+            <Link href="/">
+              <Button variant="ghost" className="mb-6" data-testid="button-back">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Home
+              </Button>
+            </Link>
 
         <h1 data-testid="heading-privacy-policy" className="text-4xl font-bold mb-4">
           Privacy Policy
@@ -308,13 +333,14 @@ export default function PrivacyPage() {
           </Card>
         </div>
 
-        <div className="mt-12 p-6 bg-muted/30 rounded-lg">
-          <p className="text-sm text-muted-foreground text-center">
-            This Privacy Policy is effective as of October 2, 2025. By using 88Away, you acknowledge 
-            that you have read and understood this Privacy Policy and agree to its terms.
-          </p>
-        </div>
-      </div>
-    </div>
+            <div className="mt-12 p-6 bg-muted/30 rounded-lg">
+              <p className="text-sm text-muted-foreground text-center">
+                This Privacy Policy is effective as of October 2, 2025. By using 88Away, you acknowledge 
+                that you have read and understood this Privacy Policy and agree to its terms.
+              </p>
+            </div>
+            </div>
+          </div>
+    </>
   );
 }

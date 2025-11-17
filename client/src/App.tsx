@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { Footer } from "@/components/footer";
+import { Seo } from "@/components/seo";
 import Landing from "@/pages/landing";
 import Dashboard from "@/pages/dashboard";
 import Project from "@/pages/project";
@@ -66,6 +67,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
+        <Seo />
         <Toaster />
         <Router />
         <Footer />

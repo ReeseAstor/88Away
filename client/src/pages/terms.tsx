@@ -2,17 +2,42 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { ArrowLeft } from "lucide-react";
+import { Seo } from "@/components/seo";
 
 export default function TermsPage() {
+  const envBase =
+    (import.meta.env as { VITE_SITE_URL?: string })?.VITE_SITE_URL ??
+    "https://88away.com";
+  const siteUrl = envBase.endsWith("/") ? envBase.slice(0, -1) : envBase;
+
   return (
-    <div data-testid="page-terms" className="min-h-screen bg-background">
-      <div className="container max-w-4xl mx-auto py-12 px-4">
-        <Link href="/">
-          <Button variant="ghost" className="mb-6" data-testid="button-back">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Home
-          </Button>
-        </Link>
+    <>
+      <Seo
+        title="Terms and Conditions"
+        description="Read the 88Away terms of service governing AI writing features, collaboration tools, publishing workflows, and enterprise access."
+        noindex
+        structuredData={{
+          "@context": "https://schema.org",
+          "@type": "TermsOfService",
+          name: "88Away Terms and Conditions",
+          url: `${siteUrl}/terms`,
+          inLanguage: "en-US",
+          publisher: {
+            "@type": "Organization",
+            name: "88Away",
+            url: siteUrl,
+          },
+          dateModified: "2025-10-02",
+        }}
+      />
+        <div data-testid="page-terms" className="min-h-screen bg-background">
+          <div className="container max-w-4xl mx-auto py-12 px-4">
+            <Link href="/">
+              <Button variant="ghost" className="mb-6" data-testid="button-back">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Home
+              </Button>
+            </Link>
 
         <h1 data-testid="heading-terms-conditions" className="text-4xl font-bold mb-4">
           Terms and Conditions
@@ -586,13 +611,14 @@ export default function TermsPage() {
           </Card>
         </div>
 
-        <div className="mt-12 p-6 bg-muted/30 rounded-lg">
-          <p className="text-sm text-muted-foreground text-center">
-            These Terms and Conditions are effective as of October 2, 2025. By using 88Away, you acknowledge 
-            that you have read, understood, and agree to be bound by these Terms and Conditions.
-          </p>
+            <div className="mt-12 p-6 bg-muted/30 rounded-lg">
+              <p className="text-sm text-muted-foreground text-center">
+                These Terms and Conditions are effective as of October 2, 2025. By using 88Away, you acknowledge 
+                that you have read, understood, and agree to be bound by these Terms and Conditions.
+              </p>
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
+      </>
   );
 }
