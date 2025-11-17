@@ -14,8 +14,15 @@ import {
 } from "lucide-react";
 import logo from "@/assets/88away-logo-pink.png";
 import logoWhite from "@/assets/88away-logo-white.png";
+import { Seo } from "@/components/seo";
 
 export default function Landing() {
+  const envBase =
+    (import.meta.env as { VITE_SITE_URL?: string })?.VITE_SITE_URL ??
+    "https://88away.com";
+  const siteUrl = envBase.endsWith("/") ? envBase.slice(0, -1) : envBase;
+  const shareImageUrl = `${siteUrl}${logo}`;
+
   const features = [
     {
       icon: <BookOpen className="h-8 w-8 text-accent" />,
@@ -86,7 +93,74 @@ export default function Landing() {
   ];
 
   return (
-    <div className="min-h-screen bg-background">
+    <>
+      <Seo
+        title="AI Writing Software for Professional Authors"
+        description="Plan, write, and publish your stories with AI-powered assistance, worldbuilding databases, and collaborative workflows built for professional authors."
+        keywords={[
+          "AI writing software",
+          "story bible management",
+          "author collaboration platform",
+          "novel planning tools",
+          "creative writing AI",
+        ]}
+        structuredData={[
+          {
+            "@context": "https://schema.org",
+            "@type": "Organization",
+            name: "88Away",
+            url: siteUrl,
+            logo: shareImageUrl,
+            contactPoint: {
+              "@type": "ContactPoint",
+              email: "info@88away.com",
+              contactType: "customer support",
+            },
+          },
+          {
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            url: siteUrl,
+            name: "88Away",
+            potentialAction: {
+              "@type": "SearchAction",
+              target: `${siteUrl}/search?q={search_term_string}`,
+              "query-input": "required name=search_term_string",
+            },
+          },
+          {
+            "@context": "https://schema.org",
+            "@type": "SoftwareApplication",
+            name: "88Away",
+            applicationCategory: "ProductivityApplication",
+            operatingSystem: "Web",
+            offers: {
+              "@type": "Offer",
+              price: "9.00",
+              priceCurrency: "USD",
+              priceSpecification: [
+                {
+                  "@type": "UnitPriceSpecification",
+                  price: "9.00",
+                  priceCurrency: "USD",
+                  description: "Starter monthly plan",
+                },
+                {
+                  "@type": "UnitPriceSpecification",
+                  price: "29.00",
+                  priceCurrency: "USD",
+                  description: "Professional monthly plan",
+                },
+              ],
+            },
+            description:
+              "88Away is a professional writing platform that combines AI-assisted drafting, story bible management, and real-time collaboration for storytelling teams.",
+            url: siteUrl,
+            image: shareImageUrl,
+          },
+        ]}
+      />
+      <div className="min-h-screen bg-background">
       {/* Hero Section */}
       <div className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-accent/5 to-chart-1/5"></div>
@@ -354,5 +428,6 @@ export default function Landing() {
         </div>
       </footer>
     </div>
+    </>
   );
 }

@@ -22,6 +22,13 @@ import {
   type CharacterDevelopmentRequest,
   type NarrativeFlowRequest
 } from "./openai";
+import { kdpService } from "./kdp-integration";
+import { stripeMarketplace } from "./stripe-marketplace";
+import { subscriptionService } from "./subscription-service";
+import { checkUsageLimit, requireFeature, checkExportFormat } from "./subscription-middleware";
+import multer from 'multer';
+import fs from 'fs';
+import path from 'path';
 import { AnalyticsService } from "./analytics";
 import { 
   insertProjectSchema,
@@ -56,6 +63,7 @@ import {
   listUserSms,
   getSmsById,
 } from "./brevoSmsService";
+import realtimeRouter from './realtime-api';
 
 let stripe: Stripe | null = null;
 
@@ -72,6 +80,9 @@ function getStripeClient(): Stripe {
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
+
+  // Register real-time API routes
+  app.use(realtimeRouter);
 
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
@@ -131,7 +142,718 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Project routes
+  // Romance-specific API endpoints
+  
+  // Romance series management
+  app.get('/api/romance/series', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const series = await storage.getUserRomanceSeries(userId);
+      res.json(series);
+    } catch (error) {
+      console.error("Error fetching romance series:", error);
+      res.status(500).json({ message: "Failed to fetch romance series" });
+    }
+  });
+
+  app.post('/api/romance/series', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const seriesData = req.body;
+      const series = await storage.createRomanceSeries(seriesData, userId);
+      res.json(series);
+    } catch (error) {
+      console.error("Error creating romance series:", error);
+      res.status(500).json({ message: "Failed to create romance series" });
+    }
+  });
+
+  // Romance tropes management
+  app.get('/api/romance/tropes', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const tropes = await storage.getUserRomanceTropes(userId);
+      res.json(tropes);
+    } catch (error) {
+      console.error("Error fetching romance tropes:", error);
+      res.status(500).json({ message: "Failed to fetch romance tropes" });
+    }
+  });
+
+  app.post('/api/romance/tropes', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const tropeData = req.body;
+      const trope = await storage.createRomanceTrope(tropeData, userId);
+      res.json(trope);
+    } catch (error) {
+      console.error("Error creating romance trope:", error);
+      res.status(500).json({ message: "Failed to create romance trope" });
+    }
+  });
+
+  // Romance analytics
+  app.get('/api/romance/analytics/:projectId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const projectId = req.params.projectId;
+      const analytics = await AnalyticsService.getRomanceAnalytics(projectId, userId);
+      res.json(analytics);
+    } catch (error) {
+      console.error("Error fetching romance analytics:", error);
+      res.status(500).json({ message: "Failed to fetch romance analytics" });
+    }
+  });
+
+  // Romance market trends
+  app.get('/api/romance/market-trends', isAuthenticated, async (req: any, res) => {
+    try {
+      const timeframe = req.query.timeframe || 'quarter';
+      const region = req.query.region || 'global';
+      const trends = await storage.getRomanceMarketTrends(timeframe, region);
+      res.json(trends);
+    } catch (error) {
+      console.error("Error fetching market trends:", error);
+      res.status(500).json({ message: "Failed to fetch market trends" });
+    }
+  });
+
+  // Romance client portfolio
+  app.get('/api/romance/clients', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const clients = await storage.getRomanceClients(userId);
+      res.json(clients);
+    } catch (error) {
+      console.error("Error fetching romance clients:", error);
+      res.status(500).json({ message: "Failed to fetch romance clients" });
+    }
+  });
+
+  app.post('/api/romance/clients', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const clientData = req.body;
+      const client = await storage.createRomanceClient(clientData, userId);
+      res.json(client);
+    } catch (error) {
+      console.error("Error creating romance client:", error);
+      res.status(500).json({ message: "Failed to create romance client" });
+    }
+  });
+
+  // Romance publishing pipeline
+  app.post('/api/romance/covers', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const coverData = req.body;
+      const cover = await storage.createRomanceCover(coverData, userId);
+      res.json(cover);
+    } catch (error) {
+      console.error("Error creating romance cover:", error);
+      res.status(500).json({ message: "Failed to create romance cover" });
+    }
+  });
+
+  app.post('/api/romance/blurbs', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const blurbData = req.body;
+      const blurb = await storage.createRomanceBlurb(blurbData, userId);
+      res.json(blurb);
+    } catch (error) {
+      console.error("Error creating romance blurb:", error);
+      res.status(500).json({ message: "Failed to create romance blurb" });
+    }
+  });
+
+  // Romance revenue tracking (enhanced)
+  
+  // Get revenue overview with analytics
+  app.get('/api/romance/revenue', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const timeframe = req.query.timeframe || 'month';
+      const revenue = await storage.getRomanceRevenue(userId, timeframe as string);
+      res.json(revenue);
+    } catch (error) {
+      console.error("Error fetching romance revenue:", error);
+      res.status(500).json({ message: "Failed to fetch romance revenue" });
+    }
+  });
+
+  // Create revenue entry
+  app.post('/api/romance/revenue', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const revenueData = req.body;
+      const revenue = await storage.createRevenueEntry(revenueData, userId);
+      res.json(revenue);
+    } catch (error) {
+      console.error("Error creating revenue entry:", error);
+      res.status(500).json({ message: "Failed to create revenue entry" });
+    }
+  });
+
+  // Get detailed revenue analytics
+  app.get('/api/revenue/analytics', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { timeframe = 'month', groupBy = 'source' } = req.query;
+      
+      const revenueData = await storage.getRomanceRevenue(userId, timeframe as string);
+      
+      // Calculate analytics
+      const analytics = {
+        summary: {
+          totalRevenue: revenueData.totalRevenue,
+          bookSales: revenueData.bookSales,
+          royalties: revenueData.royalties,
+          subscriptions: revenueData.subscriptions,
+          averageTransaction: revenueData.entries.length > 0 
+            ? revenueData.totalRevenue / revenueData.entries.length 
+            : 0,
+          transactionCount: revenueData.entries.length,
+        },
+        bySource: {} as Record<string, { total: number; count: number; average: number }>,
+        byProject: revenueData.projectRevenue,
+        timeline: [] as any[],
+        growth: {
+          percentChange: 0,
+          trend: 'stable' as 'up' | 'down' | 'stable',
+        },
+      };
+
+      // Group by source
+      revenueData.entries.forEach((entry: any) => {
+        const source = entry.source || 'unknown';
+        if (!analytics.bySource[source]) {
+          analytics.bySource[source] = { total: 0, count: 0, average: 0 };
+        }
+        analytics.bySource[source].total += entry.amount || 0;
+        analytics.bySource[source].count += 1;
+      });
+
+      // Calculate averages
+      Object.keys(analytics.bySource).forEach(source => {
+        const data = analytics.bySource[source];
+        data.average = data.count > 0 ? data.total / data.count : 0;
+      });
+
+      // Build timeline
+      const entriesByDate = revenueData.entries.reduce((acc: any, entry: any) => {
+        const date = new Date(entry.transactionDate).toISOString().split('T')[0];
+        if (!acc[date]) {
+          acc[date] = { date, amount: 0, count: 0 };
+        }
+        acc[date].amount += entry.amount || 0;
+        acc[date].count += 1;
+        return acc;
+      }, {});
+      
+      analytics.timeline = Object.values(entriesByDate).sort((a: any, b: any) => 
+        new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
+
+      res.json(analytics);
+    } catch (error) {
+      console.error("Error fetching revenue analytics:", error);
+      res.status(500).json({ message: "Failed to fetch revenue analytics" });
+    }
+  });
+
+  // Get revenue by project
+  app.get('/api/revenue/by-project/:projectId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { projectId } = req.params;
+      const { timeframe = 'month' } = req.query;
+      
+      // Verify project ownership
+      const project = await storage.getProject(projectId);
+      if (!project || project.ownerId !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const revenueData = await storage.getRomanceRevenue(userId, timeframe as string);
+      const projectEntries = revenueData.entries.filter((e: any) => e.projectId === projectId);
+      const totalRevenue = projectEntries.reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
+
+      res.json({
+        projectId,
+        totalRevenue,
+        entries: projectEntries,
+        timeframe,
+      });
+    } catch (error) {
+      console.error("Error fetching project revenue:", error);
+      res.status(500).json({ message: "Failed to fetch project revenue" });
+    }
+  });
+
+  // Export revenue data
+  app.get('/api/revenue/export', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { timeframe = 'year', format = 'json' } = req.query;
+      
+      const revenueData = await storage.getRomanceRevenue(userId, timeframe as string);
+      
+      if (format === 'csv') {
+        // Convert to CSV format
+        const headers = ['Date', 'Source', 'Amount', 'Currency', 'Description'];
+        const rows = revenueData.entries.map((entry: any) => [
+          new Date(entry.transactionDate).toISOString(),
+          entry.source,
+          (entry.amount / 100).toFixed(2),
+          entry.currency || 'USD',
+          entry.description || '',
+        ]);
+        
+        const csv = [
+          headers.join(','),
+          ...rows.map((row: any[]) => row.map((cell: any) => `"${cell}"`).join(','))
+        ].join('\n');
+        
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename=revenue-${timeframe}.csv`);
+        res.send(csv);
+      } else {
+        res.json(revenueData);
+      }
+    } catch (error) {
+      console.error("Error exporting revenue data:", error);
+      res.status(500).json({ message: "Failed to export revenue data" });
+    }
+  });
+
+  // Existing routes continue...
+  
+  // Configure multer for file uploads
+  const upload = multer({
+    dest: 'uploads/',
+    limits: {
+      fileSize: 50 * 1024 * 1024, // 50MB limit
+    },
+    fileFilter: (req, file, cb) => {
+      // Allow images and PDFs for covers and manuscripts
+      if (file.mimetype.match(/^(image|application\/pdf)/)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Invalid file type'), false);
+      }
+    }
+  });
+
+  // KDP Integration routes
+  app.get('/api/kdp/credentials/validate', isAuthenticated, async (req: any, res) => {
+    try {
+      const isValid = await kdpService.validateCredentials();
+      res.json({ valid: isValid });
+    } catch (error) {
+      console.error('Error validating KDP credentials:', error);
+      res.status(500).json({ message: 'Failed to validate KDP credentials' });
+    }
+  });
+
+  app.post('/api/kdp/books', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { metadata, projectId } = req.body;
+
+      // Validate metadata
+      const validation = await kdpService.validateMetadata(metadata);
+      if (!validation.valid) {
+        return res.status(400).json({ errors: validation.errors });
+      }
+
+      // Create book on KDP
+      const result = await kdpService.createBook(metadata);
+      if (!result.success) {
+        return res.status(400).json({ errors: result.errors });
+      }
+
+      // Store metadata in our database
+      const kdpMetadata = await storage.createKDPMetadata({
+        projectId,
+        kdpBookId: result.bookId!,
+        status: 'draft',
+        metadata,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+
+      res.json({ bookId: result.bookId, metadata: kdpMetadata });
+    } catch (error) {
+      console.error('Error creating KDP book:', error);
+      res.status(500).json({ message: 'Failed to create KDP book' });
+    }
+  });
+
+  app.post('/api/kdp/books/:bookId/cover', isAuthenticated, upload.single('cover'), async (req: any, res) => {
+    try {
+      const { bookId } = req.params;
+      const { format } = req.body;
+      
+      if (!req.file) {
+        return res.status(400).json({ message: 'Cover file is required' });
+      }
+
+      const result = await kdpService.uploadCover(bookId, req.file.path, format);
+      
+      // Clean up uploaded file
+      fs.unlinkSync(req.file.path);
+
+      if (!result.success) {
+        return res.status(400).json({ errors: result.errors });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error uploading cover:', error);
+      if (req.file) {
+        fs.unlinkSync(req.file.path);
+      }
+      res.status(500).json({ message: 'Failed to upload cover' });
+    }
+  });
+
+  app.post('/api/kdp/books/:bookId/manuscript', isAuthenticated, upload.single('manuscript'), async (req: any, res) => {
+    try {
+      const { bookId } = req.params;
+      
+      if (!req.file) {
+        return res.status(400).json({ message: 'Manuscript file is required' });
+      }
+
+      const result = await kdpService.uploadManuscript(bookId, req.file.path);
+      
+      // Clean up uploaded file
+      fs.unlinkSync(req.file.path);
+
+      if (!result.success) {
+        return res.status(400).json({ errors: result.errors });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error uploading manuscript:', error);
+      if (req.file) {
+        fs.unlinkSync(req.file.path);
+      }
+      res.status(500).json({ message: 'Failed to upload manuscript' });
+    }
+  });
+
+  app.put('/api/kdp/books/:bookId/pricing', isAuthenticated, async (req: any, res) => {
+    try {
+      const { bookId } = req.params;
+      const { pricing } = req.body;
+
+      const result = await kdpService.setPricing(bookId, pricing);
+      
+      if (!result.success) {
+        return res.status(400).json({ errors: result.errors });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error setting pricing:', error);
+      res.status(500).json({ message: 'Failed to set pricing' });
+    }
+  });
+
+  app.post('/api/kdp/books/:bookId/submit', isAuthenticated, async (req: any, res) => {
+    try {
+      const { bookId } = req.params;
+
+      const result = await kdpService.submitForReview(bookId);
+      
+      if (!result.success) {
+        return res.status(400).json({ errors: result.errors });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error submitting for review:', error);
+      res.status(500).json({ message: 'Failed to submit for review' });
+    }
+  });
+
+  app.get('/api/kdp/books/:bookId/status', isAuthenticated, async (req: any, res) => {
+    try {
+      const { bookId } = req.params;
+
+      const status = await kdpService.getPublishingStatus(bookId);
+      
+      if (!status) {
+        return res.status(404).json({ message: 'Book not found' });
+      }
+
+      res.json(status);
+    } catch (error) {
+      console.error('Error getting book status:', error);
+      res.status(500).json({ message: 'Failed to get book status' });
+    }
+  });
+
+  app.get('/api/kdp/books/:bookId/sales', isAuthenticated, async (req: any, res) => {
+    try {
+      const { bookId } = req.params;
+      const { startDate, endDate } = req.query;
+
+      const start = new Date(startDate as string);
+      const end = new Date(endDate as string);
+
+      const salesData = await kdpService.getSalesData(bookId, start, end);
+      
+      if (!salesData) {
+        return res.status(404).json({ message: 'Sales data not available' });
+      }
+
+      res.json(salesData);
+    } catch (error) {
+      console.error('Error getting sales data:', error);
+      res.status(500).json({ message: 'Failed to get sales data' });
+    }
+  });
+
+  app.get('/api/kdp/cover-requirements/:format', isAuthenticated, async (req: any, res) => {
+    try {
+      const { format } = req.params;
+      
+      if (format !== 'ebook' && format !== 'paperback') {
+        return res.status(400).json({ message: 'Invalid format. Must be "ebook" or "paperback"' });
+      }
+
+      const requirements = await kdpService.getCoverRequirements(format);
+      res.json(requirements);
+    } catch (error) {
+      console.error('Error getting cover requirements:', error);
+      res.status(500).json({ message: 'Failed to get cover requirements' });
+    }
+  });
+
+  app.post('/api/kdp/keywords/optimize', isAuthenticated, async (req: any, res) => {
+    try {
+      const { genre, subgenres, tropes } = req.body;
+
+      const keywords = await kdpService.generateOptimizedKeywords(genre, subgenres, tropes);
+      res.json({ keywords });
+    } catch (error) {
+      console.error('Error optimizing keywords:', error);
+      res.status(500).json({ message: 'Failed to optimize keywords' });
+    }
+  });
+
+  app.get('/api/kdp/projects/:projectId/metadata', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { projectId } = req.params;
+
+      // Verify project access
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ message: 'Project not found' });
+      }
+
+      const hasAccess = project.ownerId === userId || 
+        project.collaborators.some(c => c.userId === userId);
+      
+      if (!hasAccess) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+
+      const metadata = await storage.getProjectKDPMetadata(projectId);
+      res.json(metadata);
+    } catch (error) {
+      console.error('Error getting project KDP metadata:', error);
+      res.status(500).json({ message: 'Failed to get KDP metadata' });
+    }
+  });
+
+  // Stripe Marketplace routes
+  app.post('/api/marketplace/connect', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user?.email) {
+        return res.status(400).json({ message: 'User email is required' });
+      }
+
+      const { businessType } = req.body;
+      const result = await stripeMarketplace.createConnectedAccount(user.email, businessType);
+      
+      // Store account ID in user record
+      await storage.updateUser(userId, { stripeAccountId: result.accountId });
+      
+      res.json(result);
+    } catch (error) {
+      console.error('Error creating connected account:', error);
+      res.status(500).json({ message: 'Failed to create connected account' });
+    }
+  });
+
+  app.post('/api/marketplace/products', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const productData = req.body;
+      
+      const product = await stripeMarketplace.createProduct({
+        ...productData,
+        metadata: {
+          ...productData.metadata,
+          authorId: userId,
+        },
+      });
+      
+      res.json(product);
+    } catch (error) {
+      console.error('Error creating marketplace product:', error);
+      res.status(500).json({ message: 'Failed to create product' });
+    }
+  });
+
+  app.post('/api/marketplace/prices', isAuthenticated, async (req: any, res) => {
+    try {
+      const priceData = req.body;
+      const price = await stripeMarketplace.createPrice(priceData);
+      res.json(price);
+    } catch (error) {
+      console.error('Error creating price:', error);
+      res.status(500).json({ message: 'Failed to create price' });
+    }
+  });
+
+  app.post('/api/marketplace/checkout', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const {
+        priceId,
+        sellerId,
+        sellerAccountId,
+        successUrl,
+        cancelUrl,
+        metadata,
+      } = req.body;
+      
+      const feeStructure = await stripeMarketplace.getMarketplaceFeeStructure();
+      
+      const session = await stripeMarketplace.createCheckoutSession({
+        priceId,
+        buyerId: userId,
+        sellerId,
+        sellerAccountId,
+        platformFeePercent: feeStructure.platformFeePercent,
+        successUrl,
+        cancelUrl,
+        metadata,
+      });
+      
+      res.json(session);
+    } catch (error) {
+      console.error('Error creating checkout session:', error);
+      res.status(500).json({ message: 'Failed to create checkout session' });
+    }
+  });
+
+  app.post('/api/marketplace/webhook', async (req: any, res) => {
+    try {
+      const signature = req.headers['stripe-signature'];
+      const payload = req.body;
+      
+      await stripeMarketplace.handleWebhook(payload, signature);
+      res.json({ received: true });
+    } catch (error) {
+      console.error('Error handling webhook:', error);
+      res.status(400).json({ message: 'Webhook error' });
+    }
+  });
+
+  // Stripe subscription webhook handler
+  app.post('/api/subscription/webhook', express.raw({ type: 'application/json' }), async (req: any, res) => {
+    try {
+      const signature = req.headers['stripe-signature'] as string;
+      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
+      
+      if (!signature || !webhookSecret) {
+        return res.status(400).json({ message: 'Missing signature or webhook secret' });
+      }
+
+      // Construct Stripe event
+      const stripe = getStripeClient();
+      const event = stripe.webhooks.constructEvent(
+        req.body,
+        signature,
+        webhookSecret
+      );
+      
+      // Handle subscription webhook events
+      await subscriptionService.handleWebhook(event);
+      
+      res.json({ received: true });
+    } catch (error: any) {
+      console.error("Error handling subscription webhook:", error);
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.get('/api/marketplace/analytics/:sellerId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { sellerId } = req.params;
+      const { period } = req.query;
+      
+      // Check if user can access this seller's analytics
+      if (userId !== sellerId) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+      
+      const analytics = await stripeMarketplace.getSellerAnalytics(
+        sellerId,
+        period as 'week' | 'month' | 'year'
+      );
+      
+      res.json(analytics);
+    } catch (error) {
+      console.error('Error getting seller analytics:', error);
+      res.status(500).json({ message: 'Failed to get analytics' });
+    }
+  });
+
+  app.post('/api/marketplace/refund', isAuthenticated, async (req: any, res) => {
+    try {
+      const { paymentIntentId, amount } = req.body;
+      const refund = await stripeMarketplace.createRefund(paymentIntentId, amount);
+      res.json(refund);
+    } catch (error) {
+      console.error('Error creating refund:', error);
+      res.status(500).json({ message: 'Failed to create refund' });
+    }
+  });
+
+  app.get('/api/marketplace/fees/calculate', isAuthenticated, async (req: any, res) => {
+    try {
+      const { amount } = req.query;
+      const fees = await stripeMarketplace.calculateFees(parseInt(amount as string));
+      res.json(fees);
+    } catch (error) {
+      console.error('Error calculating fees:', error);
+      res.status(500).json({ message: 'Failed to calculate fees' });
+    }
+  });
+
+  app.get('/api/marketplace/fees/structure', isAuthenticated, async (req: any, res) => {
+    try {
+      const feeStructure = await stripeMarketplace.getMarketplaceFeeStructure();
+      res.json(feeStructure);
+    } catch (error) {
+      console.error('Error getting fee structure:', error);
+      res.status(500).json({ message: 'Failed to get fee structure' });
+    }
+  });
+
   app.get('/api/projects', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
@@ -167,7 +889,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/projects', isAuthenticated, async (req: any, res) => {
+  app.post('/api/projects', isAuthenticated, checkUsageLimit('projects'), async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const { template, ...projectData } = req.body;
@@ -1809,7 +2531,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // AI Assistant routes
-  app.post('/api/ai/generate', isAuthenticated, async (req: any, res) => {
+  app.post('/api/ai/generate', isAuthenticated, checkUsageLimit('aiSessions'), async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const { intent, persona, project_id, context_refs, params, userPrompt } = req.body;
@@ -2015,6 +2737,204 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error with Coach generation:", error);
       res.status(500).json({ message: "Failed to generate outline" });
+    }
+  });
+
+  // OCR Routes
+  app.post('/api/ocr/extract', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { imageUrl, imageBase64, expertMode, extractTables, extractFormatting, language, projectId } = req.body;
+
+      // Validate input
+      if (!imageUrl && !imageBase64) {
+        return res.status(400).json({ message: "Either imageUrl or imageBase64 must be provided" });
+      }
+
+      // Check user's AI usage limits
+      const user = await storage.getUser(userId);
+      const plan = user?.subscriptionPlan || 'free';
+      const usageCount = await storage.getUserAIUsageCount(userId);
+      
+      const { AI_LIMITS } = await import("./openai");
+      const limit = AI_LIMITS[plan as keyof typeof AI_LIMITS].monthly_generations;
+      
+      if (limit !== -1 && usageCount >= limit) {
+        return res.status(403).json({ 
+          message: `Monthly AI usage limit reached (${limit} generations). Please upgrade your plan.`,
+          requiresUpgrade: true
+        });
+      }
+
+      // Perform OCR
+      const { performOCR } = await import("./ocr");
+      const result = await performOCR({
+        imageUrl,
+        imageBase64,
+        expertMode,
+        extractTables,
+        extractFormatting,
+        language
+      });
+
+      // Store OCR result
+      if (projectId) {
+        await storage.createOCRRecord({
+          userId,
+          projectId,
+          expertMode,
+          extractedText: result.text,
+          metadata: result.metadata
+        });
+      }
+
+      // Increment AI usage
+      await storage.incrementAIUsage(userId, projectId || null, 'ocr');
+
+      res.json(result);
+    } catch (error) {
+      console.error("OCR extraction failed:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to extract text from image" 
+      });
+    }
+  });
+
+  app.post('/api/ocr/batch', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { requests, projectId } = req.body;
+
+      if (!Array.isArray(requests) || requests.length === 0) {
+        return res.status(400).json({ message: "Requests array is required" });
+      }
+
+      if (requests.length > 10) {
+        return res.status(400).json({ message: "Maximum 10 images per batch" });
+      }
+
+      // Check user's AI usage limits
+      const user = await storage.getUser(userId);
+      const plan = user?.subscriptionPlan || 'free';
+      const usageCount = await storage.getUserAIUsageCount(userId);
+      
+      const { AI_LIMITS } = await import("./openai");
+      const limit = AI_LIMITS[plan as keyof typeof AI_LIMITS].monthly_generations;
+      
+      if (limit !== -1 && usageCount + requests.length > limit) {
+        return res.status(403).json({ 
+          message: `Batch would exceed monthly AI usage limit (${limit} generations). Please upgrade your plan.`,
+          requiresUpgrade: true
+        });
+      }
+
+      // Perform batch OCR
+      const { performBatchOCR } = await import("./ocr");
+      const results = await performBatchOCR(requests);
+
+      // Store successful OCR results
+      if (projectId) {
+        for (const result of results) {
+          if (result.success) {
+            await storage.createOCRRecord({
+              userId,
+              projectId,
+              expertMode: result.metadata.expertMode,
+              extractedText: result.text,
+              metadata: result.metadata
+            });
+          }
+        }
+      }
+
+      // Increment AI usage for each request
+      for (let i = 0; i < requests.length; i++) {
+        await storage.incrementAIUsage(userId, projectId || null, 'ocr');
+      }
+
+      res.json({ results });
+    } catch (error) {
+      console.error("Batch OCR failed:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to process batch OCR" 
+      });
+    }
+  });
+
+  app.get('/api/ocr/history', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { projectId, limit = 50 } = req.query;
+
+      const history = await storage.getOCRHistory(userId, projectId, parseInt(limit as string));
+      res.json(history);
+    } catch (error) {
+      console.error("Failed to fetch OCR history:", error);
+      res.status(500).json({ message: "Failed to fetch OCR history" });
+    }
+  });
+
+  app.get('/api/expert-modes', isAuthenticated, async (req: any, res) => {
+    try {
+      const { getAllLanguagePackages } = await import("./languages");
+      const packages = getAllLanguagePackages();
+      
+      // Return simplified package info
+      const simplified = packages.map(pkg => ({
+        mode: pkg.mode,
+        displayName: pkg.displayName,
+        description: pkg.description,
+        terminology: {
+          commonCount: pkg.terminology.common.length,
+          advancedCount: pkg.terminology.advanced.length,
+          examples: pkg.terminology.common.slice(0, 5)
+        }
+      }));
+
+      res.json(simplified);
+    } catch (error) {
+      console.error("Failed to fetch expert modes:", error);
+      res.status(500).json({ message: "Failed to fetch expert modes" });
+    }
+  });
+
+  app.post('/api/expert-modes/validate', isAuthenticated, async (req: any, res) => {
+    try {
+      const { text, mode } = req.body;
+
+      if (!text || !mode) {
+        return res.status(400).json({ message: "Text and mode are required" });
+      }
+
+      const { validateExpertModeText } = await import("./languages");
+      const validation = validateExpertModeText(text, mode);
+
+      res.json(validation);
+    } catch (error) {
+      console.error("Text validation failed:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to validate text" 
+      });
+    }
+  });
+
+  app.post('/api/expert-modes/enhance', isAuthenticated, async (req: any, res) => {
+    try {
+      const { text, mode } = req.body;
+
+      if (!text || !mode) {
+        return res.status(400).json({ message: "Text and mode are required" });
+      }
+
+      const { enhanceForExpertMode } = await import("./languages");
+      const enhanced = enhanceForExpertMode(text, mode);
+
+      res.json({ enhanced });
+    } catch (error) {
+      console.error("Text enhancement failed:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to enhance text" 
+      });
     }
   });
 
@@ -2431,7 +3351,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Export route with multiple format support
-  app.get('/api/projects/:projectId/export', isAuthenticated, async (req: any, res) => {
+  app.get('/api/projects/:projectId/export', isAuthenticated, checkExportFormat, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const format = req.query.format || 'json'; // Default to JSON
@@ -3359,50 +4279,134 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Stripe subscription routes
-  app.get('/api/get-or-create-subscription', isAuthenticated, async (req: any, res) => {
-    const user = req.user;
-
-    if (user.stripeSubscriptionId) {
-      const stripeClient = getStripeClient();
-      const subscription = await stripeClient.subscriptions.retrieve(user.stripeSubscriptionId);
-
-      res.send({
-        subscriptionId: subscription.id,
-        clientSecret: subscription.latest_invoice && typeof subscription.latest_invoice === 'object' && 'payment_intent' in subscription.latest_invoice && subscription.latest_invoice.payment_intent && typeof subscription.latest_invoice.payment_intent === 'object' && 'client_secret' in subscription.latest_invoice.payment_intent ? subscription.latest_invoice.payment_intent.client_secret : undefined,
-      });
-
-      return;
-    }
-    
-    if (!user.email) {
-      throw new Error('No user email on file');
-    }
-
-    try {
-      const stripeClient = getStripeClient();
-      const customer = await stripeClient.customers.create({
-        email: user.email,
-        name: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
-      });
-
-      await storage.updateUserStripeInfo(user.claims.sub, customer.id, '');
-
-      const subscription = await stripeClient.subscriptions.create({
-        customer: customer.id,
-        items: [{
-          price: process.env.STRIPE_PRICE_ID,
-        }],
-        payment_behavior: 'default_incomplete',
-        expand: ['latest_invoice.payment_intent'],
-      });
-
-      await storage.updateUserStripeInfo(user.claims.sub, customer.id, subscription.id);
+  // Stripe subscription routes (enhanced)
   
-      res.send({
-        subscriptionId: subscription.id,
-        clientSecret: subscription.latest_invoice && typeof subscription.latest_invoice === 'object' && 'payment_intent' in subscription.latest_invoice && subscription.latest_invoice.payment_intent && typeof subscription.latest_invoice.payment_intent === 'object' && 'client_secret' in subscription.latest_invoice.payment_intent ? subscription.latest_invoice.payment_intent.client_secret : undefined,
-      });
+  // Get all available subscription plans
+  app.get('/api/subscription/plans', (req, res) => {
+    try {
+      const plans = subscriptionService.getPlans();
+      res.json(plans);
+    } catch (error: any) {
+      console.error("Error fetching plans:", error);
+      res.status(500).json({ message: "Failed to fetch subscription plans" });
+    }
+  });
+
+  // Get current subscription details
+  app.get('/api/subscription', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const details = await subscriptionService.getSubscription(userId);
+      res.json(details);
+    } catch (error: any) {
+      console.error("Error fetching subscription:", error);
+      res.status(500).json({ message: "Failed to fetch subscription details" });
+    }
+  });
+
+  // Create new subscription
+  app.post('/api/subscription/create', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { planId } = req.body;
+      
+      if (!planId) {
+        return res.status(400).json({ message: "Plan ID is required" });
+      }
+
+      const result = await subscriptionService.createSubscription(userId, planId);
+      res.json(result);
+    } catch (error: any) {
+      console.error("Error creating subscription:", error);
+      res.status(500).json({ message: error.message || "Failed to create subscription" });
+    }
+  });
+
+  // Update subscription (upgrade/downgrade)
+  app.put('/api/subscription/update', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { planId } = req.body;
+      
+      if (!planId) {
+        return res.status(400).json({ message: "Plan ID is required" });
+      }
+
+      const subscription = await subscriptionService.updateSubscription(userId, planId);
+      res.json(subscription);
+    } catch (error: any) {
+      console.error("Error updating subscription:", error);
+      res.status(500).json({ message: error.message || "Failed to update subscription" });
+    }
+  });
+
+  // Cancel subscription
+  app.post('/api/subscription/cancel', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { immediately } = req.body;
+      
+      const subscription = await subscriptionService.cancelSubscription(userId, immediately);
+      res.json(subscription);
+    } catch (error: any) {
+      console.error("Error canceling subscription:", error);
+      res.status(500).json({ message: error.message || "Failed to cancel subscription" });
+    }
+  });
+
+  // Reactivate canceled subscription
+  app.post('/api/subscription/reactivate', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const subscription = await subscriptionService.reactivateSubscription(userId);
+      res.json(subscription);
+    } catch (error: any) {
+      console.error("Error reactivating subscription:", error);
+      res.status(500).json({ message: error.message || "Failed to reactivate subscription" });
+    }
+  });
+
+  // Create billing portal session
+  app.post('/api/subscription/portal', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { returnUrl } = req.body;
+      
+      const url = await subscriptionService.createPortalSession(
+        userId, 
+        returnUrl || `${process.env.CLIENT_URL}/subscription`
+      );
+      res.json({ url });
+    } catch (error: any) {
+      console.error("Error creating portal session:", error);
+      res.status(500).json({ message: error.message || "Failed to create portal session" });
+    }
+  });
+
+  // Check usage limits
+  app.get('/api/subscription/usage/:limitType', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { limitType } = req.params;
+      
+      if (!['aiSessions', 'projects', 'collaborators'].includes(limitType)) {
+        return res.status(400).json({ message: "Invalid limit type" });
+      }
+
+      const usage = await subscriptionService.checkUsageLimit(userId, limitType as any);
+      res.json(usage);
+    } catch (error: any) {
+      console.error("Error checking usage:", error);
+      res.status(500).json({ message: "Failed to check usage limits" });
+    }
+  });
+
+  // Legacy endpoint (for backward compatibility)
+  app.get('/api/get-or-create-subscription', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const result = await subscriptionService.createSubscription(userId, 'professional');
+      res.json(result);
     } catch (error: any) {
       return res.status(400).send({ error: { message: error.message } });
     }

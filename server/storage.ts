@@ -18,6 +18,9 @@ import {
   activities,
   prompts,
   userFavoritePrompts,
+  ocrRecords,
+  revenueEntries,
+  kdpMetadata,
   type User,
   type UpsertUser,
   type Project,
@@ -55,6 +58,10 @@ import {
   type SearchResult,
   type Prompt,
   type UserFavoritePrompt,
+  type OCRRecord,
+  type InsertOCRRecord,
+  type RevenueEntry,
+  type InsertRevenueEntry,
 } from "@shared/schema";
 import { calculateWordCount } from "@shared/utils";
 import { db } from "./db";
@@ -198,6 +205,19 @@ export interface IStorage {
   getUserFavoritePrompts(userId: string): Promise<Prompt[]>;
   addFavoritePrompt(userId: string, promptId: number): Promise<UserFavoritePrompt>;
   removeFavoritePrompt(userId: string, promptId: number): Promise<void>;
+
+  // OCR methods
+  createOCRRecord(data: { userId: string; projectId?: string; expertMode?: string; extractedText: string; metadata: any }): Promise<any>;
+  getOCRHistory(userId: string, projectId?: string, limit?: number): Promise<any[]>;
+  
+  // AI Usage tracking
+  getUserAIUsageCount(userId: string): Promise<number>;
+  incrementAIUsage(userId: string, projectId: string | null, type: string): Promise<void>;
+
+  // Revenue and monetization operations
+  createRevenueEntry(data: any, userId: string): Promise<any>;
+  getRomanceRevenue(userId: string, timeframe?: string): Promise<any>;
+  updateUser(userId: string, updates: Partial<User>): Promise<User>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1590,6 +1610,174 @@ export class DatabaseStorage implements IStorage {
           eq(userFavoritePrompts.promptId, promptId)
         )
       );
+  }
+
+  // OCR methods
+  async createOCRRecord(data: { userId: string; projectId?: string; expertMode?: string; extractedText: string; metadata: any }): Promise<OCRRecord> {
+    const [record] = await db.insert(ocrRecords)
+      .values({
+        userId: data.userId,
+        projectId: data.projectId || null,
+        expertMode: data.expertMode as any,
+        extractedText: data.extractedText,
+        metadata: data.metadata
+      })
+      .returning();
+    return record;
+  }
+
+  async getOCRHistory(userId: string, projectId?: string, limit: number = 50): Promise<OCRRecord[]> {
+    const conditions = [eq(ocrRecords.userId, userId)];
+    
+    if (projectId) {
+      conditions.push(eq(ocrRecords.projectId, projectId));
+    }
+
+    return db.select()
+      .from(ocrRecords)
+      .where(and(...conditions))
+      .orderBy(desc(ocrRecords.createdAt))
+      .limit(limit);
+  }
+
+  // AI Usage tracking
+  async getUserAIUsageCount(userId: string): Promise<number> {
+    // Count AI generations from this month
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const [result] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(aiGenerations)
+      .where(
+        and(
+          eq(aiGenerations.userId, userId),
+          sql`${aiGenerations.createdAt} >= ${startOfMonth.toISOString()}`
+        )
+      );
+
+    return Number(result?.count || 0);
+  }
+
+  async incrementAIUsage(userId: string, projectId: string | null, type: string): Promise<void> {
+    // Record the AI usage
+    await db.insert(aiGenerations).values({
+      userId,
+      projectId: projectId || undefined,
+      persona: type,
+      prompt: `OCR extraction - ${type}`,
+      response: 'OCR processed',
+      metadata: { type, timestamp: new Date() }
+    });
+  }
+
+  // Revenue and monetization operations
+  async createRevenueEntry(data: InsertRevenueEntry, userId: string): Promise<RevenueEntry> {
+    const [entry] = await db.insert(revenueEntries)
+      .values({
+        ...data,
+        userId,
+        transactionDate: data.transactionDate || new Date(),
+      })
+      .returning();
+    return entry;
+  }
+
+  async getRomanceRevenue(userId: string, timeframe: string = 'month'): Promise<any> {
+    // Calculate date range based on timeframe
+    const now = new Date();
+    let startDate = new Date();
+    
+    switch (timeframe) {
+      case 'week':
+        startDate.setDate(now.getDate() - 7);
+        break;
+      case 'month':
+        startDate.setMonth(now.getMonth() - 1);
+        break;
+      case 'quarter':
+        startDate.setMonth(now.getMonth() - 3);
+        break;
+      case 'year':
+        startDate.setFullYear(now.getFullYear() - 1);
+        break;
+      default:
+        startDate.setMonth(now.getMonth() - 1);
+    }
+
+    // Get revenue entries
+    const entries = await db
+      .select()
+      .from(revenueEntries)
+      .where(
+        and(
+          eq(revenueEntries.userId, userId),
+          sql`${revenueEntries.transactionDate} >= ${startDate.toISOString()}`
+        )
+      )
+      .orderBy(desc(revenueEntries.transactionDate));
+
+    // Calculate totals
+    const totalRevenue = entries.reduce((sum, entry) => sum + (entry.amount || 0), 0);
+    const bookSales = entries
+      .filter(e => e.source === 'kdp' || e.source === 'book_sale')
+      .reduce((sum, entry) => sum + (entry.amount || 0), 0);
+    const royalties = entries
+      .filter(e => e.source === 'royalty')
+      .reduce((sum, entry) => sum + (entry.amount || 0), 0);
+    const subscriptions = entries
+      .filter(e => e.source === 'subscription')
+      .reduce((sum, entry) => sum + (entry.amount || 0), 0);
+
+    // Get project-specific revenue
+    const projectRevenue = await db
+      .select({
+        projectId: revenueEntries.projectId,
+        amount: sql<number>`sum(${revenueEntries.amount})`,
+        count: sql<number>`count(*)`,
+      })
+      .from(revenueEntries)
+      .where(
+        and(
+          eq(revenueEntries.userId, userId),
+          sql`${revenueEntries.transactionDate} >= ${startDate.toISOString()}`,
+          sql`${revenueEntries.projectId} IS NOT NULL`
+        )
+      )
+      .groupBy(revenueEntries.projectId);
+
+    // Get KDP sales data if available
+    const kdpData = await db
+      .select()
+      .from(kdpMetadata)
+      .innerJoin(projects, eq(kdpMetadata.projectId, projects.id))
+      .where(eq(projects.ownerId, userId));
+
+    return {
+      totalRevenue,
+      bookSales,
+      royalties,
+      subscriptions,
+      entries,
+      projectRevenue,
+      kdpData,
+      timeframe,
+      startDate,
+      endDate: now,
+    };
+  }
+
+  async updateUser(userId: string, updates: Partial<User>): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({
+        ...updates,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    return user;
   }
 }
 

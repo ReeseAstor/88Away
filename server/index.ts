@@ -1,11 +1,12 @@
+import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
-import { WebSocketServer } from 'ws';
-import { parse } from 'url';
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { CollaborationService } from "./collaboration";
 import { storage } from "./storage";
 import { startEmailScheduler, stopEmailScheduler } from "./emailScheduler";
+import { WebSocketGateway } from "./events/websocketGateway";
+import { EventStreamService } from "./events/eventStream";
 
 const app = express();
 app.use(express.json());
@@ -75,96 +76,27 @@ app.use((req, res, next) => {
     
     startEmailScheduler();
     
-    // Set up WebSocket server for collaboration on a specific path
-    const wss = new WebSocketServer({ 
-      server,
-      path: '/ws/collaboration'
-    });
+    // Initialize event stream service
+    const eventStream = EventStreamService.getInstance();
+    log('Event stream service initialized');
+    
+    // Initialize enhanced WebSocket gateway (handles multiple paths)
+    const wsGateway = WebSocketGateway.getInstance();
+    wsGateway.initialize(server);
+    log('WebSocket gateway initialized');
+    
+    // Keep legacy collaboration service for backward compatibility
+    // It will eventually be migrated to use the new event system
     const collaborationService = CollaborationService.getInstance();
     
-    wss.on('connection', async (ws, req) => {
-      try {
-        // Parse query parameters from the URL
-        const fullUrl = `http://localhost${req.url}`;
-        const url = parse(fullUrl, true);
-        const documentId = url.query.documentId as string;
-        const projectId = url.query.projectId as string;
-        
-        if (!documentId || !projectId) {
-          ws.send(JSON.stringify({ type: 'error', message: 'Missing required parameters' }));
-          ws.close();
-          return;
-        }
-        
-        // Parse cookies from request headers
-        const cookieHeader = req.headers.cookie;
-        if (!cookieHeader) {
-          ws.send(JSON.stringify({ type: 'error', message: 'No session cookie found' }));
-          ws.close();
-          return;
-        }
-        
-        // Parse cookie header to get session ID
-        const cookies: Record<string, string> = {};
-        cookieHeader.split(';').forEach(cookie => {
-          const [name, ...rest] = cookie.trim().split('=');
-          cookies[name] = rest.join('=');
-        });
-        
-        const sessionCookie = cookies['connect.sid'];
-        if (!sessionCookie) {
-          ws.send(JSON.stringify({ type: 'error', message: 'Session cookie not found' }));
-          ws.close();
-          return;
-        }
-        
-        // URL-decode the cookie and extract session ID from signed cookie (format: s:sessionId.signature)
-        let sessionId: string;
-        try {
-          const decodedCookie = decodeURIComponent(sessionCookie);
-          if (decodedCookie.startsWith('s:')) {
-            // Signed cookie - remove 's:' prefix and keep the full signature intact
-            sessionId = decodedCookie.slice(2);
-          } else {
-            // Unsigned cookie (shouldn't happen with express-session default config)
-            sessionId = decodedCookie;
-          }
-        } catch (error) {
-          ws.send(JSON.stringify({ type: 'error', message: 'Failed to decode session cookie' }));
-          ws.close();
-          return;
-        }
-        
-        // Verify session and get user
-        const session = await storage.getSession(sessionId);
-        if (!session || !session.sess || !session.sess.user) {
-          ws.send(JSON.stringify({ type: 'error', message: 'Invalid session' }));
-          ws.close();
-          return;
-        }
-        
-        const user = await storage.getUser(session.sess.user.claims.sub);
-        if (!user) {
-          ws.send(JSON.stringify({ type: 'error', message: 'User not found' }));
-          ws.close();
-          return;
-        }
-        
-        // Handle connection with collaboration service
-        await collaborationService.handleConnection(ws, user, documentId, projectId);
-        
-      } catch (error) {
-        console.error('WebSocket connection error:', error);
-        ws.send(JSON.stringify({ type: 'error', message: 'Failed to establish connection' }));
-        ws.close();
-      }
-    });
-    
     // Cleanup on shutdown
-    process.on('SIGTERM', () => {
+    process.on('SIGTERM', async () => {
+      log('Shutting down gracefully...');
       stopEmailScheduler();
       collaborationService.destroy();
-      wss.close();
+      await wsGateway.destroy();
+      await eventStream.destroy();
+      log('Shutdown complete');
     });
   });
 })();

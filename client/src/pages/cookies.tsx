@@ -10,10 +10,35 @@ import {
 } from "@/components/ui/table";
 import { Link } from "wouter";
 import { ArrowLeft } from "lucide-react";
+import { Seo } from "@/components/seo";
 
 export default function CookiesPage() {
+  const envBase =
+    (import.meta.env as { VITE_SITE_URL?: string })?.VITE_SITE_URL ??
+    "https://88away.com";
+  const siteUrl = envBase.endsWith("/") ? envBase.slice(0, -1) : envBase;
+
   return (
-    <div data-testid="page-cookies" className="min-h-screen bg-background">
+    <>
+      <Seo
+        title="Cookie Policy"
+        description="Understand how 88Away uses cookies to support authentication, personalization, analytics, and secure collaboration experiences."
+        noindex
+        structuredData={{
+          "@context": "https://schema.org",
+          "@type": "CookiePolicy",
+          name: "88Away Cookie Policy",
+          url: `${siteUrl}/cookies`,
+          inLanguage: "en-US",
+          publisher: {
+            "@type": "Organization",
+            name: "88Away",
+            url: siteUrl,
+          },
+          dateModified: "2025-10-02",
+        }}
+      />
+      <div data-testid="page-cookies" className="min-h-screen bg-background">
       <div className="container max-w-4xl mx-auto py-12 px-4">
         <Link href="/">
           <Button variant="ghost" className="mb-6" data-testid="button-back">
@@ -397,14 +422,15 @@ export default function CookiesPage() {
           </Card>
         </div>
 
-        <div className="mt-12 p-6 bg-muted/30 rounded-lg">
-          <p className="text-sm text-muted-foreground text-center">
-            This Cookie Policy is effective as of October 2, 2025. By using 88Away, you acknowledge 
-            that you have read and understood this Cookie Policy and consent to our use of cookies 
-            as described herein.
-          </p>
+          <div className="mt-12 p-6 bg-muted/30 rounded-lg">
+            <p className="text-sm text-muted-foreground text-center">
+              This Cookie Policy is effective as of October 2, 2025. By using 88Away, you acknowledge 
+              that you have read and understood this Cookie Policy and consent to our use of cookies 
+              as described herein.
+            </p>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }

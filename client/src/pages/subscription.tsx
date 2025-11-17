@@ -71,18 +71,29 @@ export default function Subscription() {
     retry: false,
   });
 
-  // Mock subscription data - in a real app, this would come from Stripe/backend
+  // Fetch real subscription data from API
+  const { data: subscriptionInfo } = useQuery({
+    queryKey: ['/api/subscription'],
+    enabled: isAuthenticated,
+    retry: false,
+  });
+
+  // Calculate subscription data from real API data
   const subscriptionData: SubscriptionData = {
-    plan: "Pro Plan",
-    status: "active",
-    aiSessionsUsed: aiGenerations.length || 24,
-    aiSessionsLimit: 100,
-    projectsUsed: projects.length || 3,
-    projectsLimit: 5,
-    collaboratorsUsed: 8,
-    collaboratorsLimit: 15,
-    nextBilling: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
-    amount: "$29.00"
+    plan: subscriptionInfo?.plan?.name || "Free Plan",
+    status: subscriptionInfo?.subscription?.status || "active",
+    aiSessionsUsed: subscriptionInfo?.usage?.aiSessions || aiGenerations.length || 0,
+    aiSessionsLimit: subscriptionInfo?.plan?.features?.aiSessionsLimit === -1 ? 999999 : (subscriptionInfo?.plan?.features?.aiSessionsLimit || 10),
+    projectsUsed: subscriptionInfo?.usage?.projects || projects.length || 0,
+    projectsLimit: subscriptionInfo?.plan?.features?.projectsLimit === -1 ? 999999 : (subscriptionInfo?.plan?.features?.projectsLimit || 1),
+    collaboratorsUsed: 0, // TODO: Calculate from actual data
+    collaboratorsLimit: subscriptionInfo?.plan?.features?.collaboratorsLimit === -1 ? 999999 : (subscriptionInfo?.plan?.features?.collaboratorsLimit || 0),
+    nextBilling: subscriptionInfo?.subscription?.current_period_end 
+      ? new Date(subscriptionInfo.subscription.current_period_end * 1000).toISOString()
+      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    amount: subscriptionInfo?.plan?.amount 
+      ? `$${(subscriptionInfo.plan.amount / 100).toFixed(2)}`
+      : "$0.00"
   };
 
   const getStatusInfo = (status: string) => {
@@ -146,20 +157,38 @@ export default function Subscription() {
     }
   ];
 
-  const handleManageBilling = () => {
-    // In a real app, this would redirect to Stripe customer portal
-    toast({
-      title: "Redirecting to Billing Portal",
-      description: "You'll be redirected to manage your subscription...",
-    });
+  const handleManageBilling = async () => {
+    try {
+      const response = await fetch('/api/subscription/portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ returnUrl: window.location.href }),
+      });
+      
+      if (!response.ok) throw new Error('Failed to create portal session');
+      
+      const { url } = await response.json();
+      window.location.href = url;
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to open billing portal. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleUpgradePlan = () => {
-    // In a real app, this would initiate upgrade flow
-    toast({
-      title: "Coming Soon",
-      description: "Plan upgrades will be available soon.",
-    });
+  const handleUpgradePlan = async () => {
+    try {
+      // Redirect to billing portal for plan changes
+      await handleManageBilling();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to initiate upgrade. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleDownloadInvoice = (date: string) => {

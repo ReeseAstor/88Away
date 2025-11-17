@@ -1,0 +1,239 @@
+version: '3.8'
+
+services:
+  # Romance Platform App
+  romance-platform:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NODE_ENV: production
+    ports:
+      - "80:3000"
+      - "443:3001"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - KDP_API_KEY=${KDP_API_KEY}
+      - KDP_API_BASE_URL=${KDP_API_BASE_URL}
+      - KDP_VENDOR_ID=${KDP_VENDOR_ID}
+      - REPLIT_DB_URL=${REPLIT_DB_URL}
+      - CLIENT_URL=${CLIENT_URL}
+      - ROMANCE_FEATURES_ENABLED=true
+      - AI_ROMANCE_PERSONAS_ENABLED=true
+      - MARKETPLACE_ENABLED=true
+      - KDP_INTEGRATION_ENABLED=true
+    volumes:
+      - romance_uploads:/app/uploads
+      - romance_exports:/app/exports
+      - romance_covers:/app/covers
+    restart: unless-stopped
+    networks:
+      - romance_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.romance-platform.rule=Host(`platform.romance-writers.com`)"
+      - "traefik.http.routers.romance-platform.tls=true"
+      - "traefik.http.routers.romance-platform.tls.certresolver=letsencrypt"
+
+  # PostgreSQL Database optimized for romance platform
+  romance-db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=romance_platform
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_INITDB_ARGS="--encoding=UTF8 --locale=en_US.UTF-8"
+    volumes:
+      - romance_db_data:/var/lib/postgresql/data
+      - ./db-init:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    networks:
+      - romance_network
+    command: >
+      postgres 
+      -c max_connections=200
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+      -c maintenance_work_mem=64MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+
+  # Redis for caching romance analytics and AI responses
+  romance-redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - romance_redis_data:/data
+    restart: unless-stopped
+    networks:
+      - romance_network
+    command: >
+      redis-server 
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+
+  # Nginx reverse proxy with romance-specific optimizations
+  romance-nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/romance-platform.conf:/etc/nginx/conf.d/romance-platform.conf
+      - romance_uploads:/var/www/uploads
+      - romance_covers:/var/www/covers
+      - certbot_certs:/etc/letsencrypt
+      - certbot_challenge:/var/www/certbot
+    restart: unless-stopped
+    networks:
+      - romance_network
+    depends_on:
+      - romance-platform
+
+  # Certbot for SSL certificates
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - certbot_certs:/etc/letsencrypt
+      - certbot_challenge:/var/www/certbot
+    command: certonly --webroot --webroot-path=/var/www/certbot --email admin@romance-writers.com --agree-tos --no-eff-email -d platform.romance-writers.com
+
+  # Romance Analytics Service (separate microservice)
+  romance-analytics:
+    build:
+      context: ./services/analytics
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://romance-redis:6379
+      - ROMANCE_ANALYTICS_ENABLED=true
+    volumes:
+      - romance_analytics_data:/app/data
+    restart: unless-stopped
+    networks:
+      - romance_network
+    depends_on:
+      - romance-db
+      - romance-redis
+
+  # AI Processing Service for romance content generation
+  romance-ai-service:
+    build:
+      context: ./services/ai-processor
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=production
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - REDIS_URL=redis://romance-redis:6379
+      - ROMANCE_AI_QUEUE_ENABLED=true
+      - MAX_CONCURRENT_AI_REQUESTS=10
+    restart: unless-stopped
+    networks:
+      - romance_network
+    depends_on:
+      - romance-redis
+    deploy:
+      replicas: 2
+
+  # File Processing Service for covers and manuscripts
+  romance-file-processor:
+    build:
+      context: ./services/file-processor
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=production
+      - AWS_S3_BUCKET=${AWS_S3_BUCKET}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - CLOUDINARY_URL=${CLOUDINARY_URL}
+    volumes:
+      - romance_uploads:/app/uploads
+      - romance_covers:/app/covers
+      - romance_exports:/app/exports
+    restart: unless-stopped
+    networks:
+      - romance_network
+
+  # Background job processor for publishing tasks
+  romance-job-queue:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://romance-redis:6379
+      - KDP_API_KEY=${KDP_API_KEY}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+    restart: unless-stopped
+    networks:
+      - romance_network
+    depends_on:
+      - romance-db
+      - romance-redis
+    deploy:
+      replicas: 3
+
+  # Monitoring and logging
+  romance-monitoring:
+    image: prom/prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+    networks:
+      - romance_network
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    restart: unless-stopped
+    networks:
+      - romance_network
+
+networks:
+  romance_network:
+    driver: bridge
+
+volumes:
+  romance_db_data:
+  romance_redis_data:
+  romance_uploads:
+  romance_exports:
+  romance_covers:
+  romance_analytics_data:
+  certbot_certs:
+  certbot_challenge:
+  prometheus_data:
+  grafana_data:
