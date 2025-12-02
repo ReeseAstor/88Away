@@ -4,7 +4,7 @@ import Stripe from "stripe";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { db } from "./db";
-import { documentComments, activities as activitiesTable } from "@shared/schema";
+import { documentComments, activities as activitiesTable, users } from "@shared/schema";
 import { eq, desc, inArray } from "drizzle-orm";
 import { 
   generateContent, 
@@ -3513,7 +3513,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const comments = await storage.getDocumentComments(req.params.id);
-      res.json(comments);
+      
+      // Enrich comments with author information
+      const enrichedComments = await Promise.all(
+        comments.map(async (comment) => {
+          const [author] = await db.select().from(users).where(eq(users.id, comment.authorId));
+          return {
+            ...comment,
+            author: author || null
+          };
+        })
+      );
+      
+      res.json(enrichedComments);
     } catch (error) {
       console.error("Error fetching comments:", error);
       res.status(500).json({ message: "Failed to fetch comments" });

@@ -24,9 +24,13 @@ import {
 import { formatDistanceToNow } from "date-fns";
 import type { DocumentComment as Comment, User } from '@shared/schema';
 
+type CommentWithAuthor = Comment & {
+  author?: User | null;
+};
+
 interface CommentThreadProps {
-  comment: Comment;
-  replies: Comment[];
+  comment: CommentWithAuthor;
+  replies: CommentWithAuthor[];
   currentUser: User | null;
   userRole?: 'owner' | 'editor' | 'reviewer' | 'reader' | null;
   onReply: (content: string) => void;
@@ -91,12 +95,12 @@ export default function CommentThread({
               {comment.author?.profileImageUrl && (
                 <AvatarImage src={comment.author.profileImageUrl} />
               )}
-              <AvatarFallback>{getUserInitials(comment.author)}</AvatarFallback>
+              <AvatarFallback>{comment.author ? getUserInitials(comment.author) : 'U'}</AvatarFallback>
             </Avatar>
             <div className="flex-1">
               <div className="flex items-center space-x-2">
                 <span className="font-medium text-sm">
-                  {comment.author?.firstName} {comment.author?.lastName}
+                  {comment.author ? `${comment.author.firstName || ''} ${comment.author.lastName || ''}`.trim() || 'Unknown User' : 'Unknown User'}
                 </span>
                 <span className="text-xs text-muted-foreground">
                   {comment.createdAt && formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
@@ -146,10 +150,10 @@ export default function CommentThread({
               )}
 
               {/* Text Range Reference */}
-              {comment.range && (
+              {comment.range && typeof comment.range === 'object' && comment.range !== null && 'start' in comment.range && 'end' in comment.range && (
                 <div className="mt-2 p-2 bg-muted rounded text-xs">
                   <span className="text-muted-foreground">Reference: </span>
-                  <span>Characters {comment.range.start} - {comment.range.end}</span>
+                  <span>Characters {(comment.range as { start: number; end: number }).start} - {(comment.range as { start: number; end: number }).end}</span>
                 </div>
               )}
             </div>
@@ -258,13 +262,13 @@ export default function CommentThread({
                     <AvatarImage src={reply.author.profileImageUrl} />
                   )}
                   <AvatarFallback className="text-xs">
-                    {getUserInitials(reply.author)}
+                    {reply.author ? getUserInitials(reply.author) : 'U'}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1">
                   <div className="flex items-center space-x-2">
                     <span className="font-medium text-sm">
-                      {reply.author?.firstName} {reply.author?.lastName}
+                      {reply.author ? `${reply.author.firstName || ''} ${reply.author.lastName || ''}`.trim() || 'Unknown User' : 'Unknown User'}
                     </span>
                     <span className="text-xs text-muted-foreground">
                       {reply.createdAt && formatDistanceToNow(new Date(reply.createdAt), { addSuffix: true })}

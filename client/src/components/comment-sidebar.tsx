@@ -65,15 +65,21 @@ export default function CommentSidebar({
   });
 
   // Group comments by thread (parent comments and their replies)
+  type CommentWithAuthor = Comment & {
+    author?: User | null;
+    parentId?: string | null;
+  };
+  
   const commentThreads = filteredComments.reduce((threads, comment) => {
-    if (!comment.parentId) {
-      threads[comment.id] = {
-        parent: comment,
-        replies: filteredComments.filter(c => c.parentId === comment.id)
+    const commentWithAuthor = comment as CommentWithAuthor;
+    if (!commentWithAuthor.parentId) {
+      threads[commentWithAuthor.id] = {
+        parent: commentWithAuthor,
+        replies: filteredComments.filter(c => (c as CommentWithAuthor).parentId === commentWithAuthor.id) as CommentWithAuthor[]
       };
     }
     return threads;
-  }, {} as Record<string, { parent: Comment; replies: Comment[] }>);
+  }, {} as Record<string, { parent: CommentWithAuthor; replies: CommentWithAuthor[] }>);
 
   const canComment = userRole && userRole !== 'reader';
 

@@ -933,7 +933,7 @@ function ProjectContent() {
       {/* Advanced Analysis Modal */}
       {showAdvancedAnalysisModal && project && (
         <AdvancedAnalysisModal
-          isOpen={showAdvancedAnalysisModal}
+          open={showAdvancedAnalysisModal}
           onClose={() => setShowAdvancedAnalysisModal(false)}
           projectId={project.id}
           projectTitle={project.title}

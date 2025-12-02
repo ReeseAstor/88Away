@@ -60,7 +60,8 @@ export default function AdvancedAnalysisModal({
   // Style Analysis Query
   const styleAnalysis = useMutation({
     mutationFn: async () => {
-      return await apiRequest("POST", `/api/projects/${projectId}/analysis/style`, {});
+      const res = await apiRequest("POST", `/api/projects/${projectId}/analysis/style`, {});
+      return await res.json();
     },
     onError: (error: any) => {
       if (error?.requiresUpgrade) {
@@ -91,7 +92,8 @@ export default function AdvancedAnalysisModal({
   // Plot Consistency Analysis
   const plotAnalysis = useMutation({
     mutationFn: async () => {
-      return await apiRequest("POST", `/api/projects/${projectId}/analysis/plot`, {});
+      const res = await apiRequest("POST", `/api/projects/${projectId}/analysis/plot`, {});
+      return await res.json();
     },
     onError: (error: any) => {
       if (error?.requiresUpgrade) {
@@ -113,7 +115,8 @@ export default function AdvancedAnalysisModal({
   // Character Development Analysis
   const characterAnalysis = useMutation({
     mutationFn: async (characterId: string) => {
-      return await apiRequest("POST", `/api/projects/${projectId}/analysis/character/${characterId}`, {});
+      const res = await apiRequest("POST", `/api/projects/${projectId}/analysis/character/${characterId}`, {});
+      return await res.json();
     },
     onError: (error: any) => {
       if (error?.requiresUpgrade) {
@@ -135,9 +138,10 @@ export default function AdvancedAnalysisModal({
   // Narrative Flow Analysis
   const narrativeAnalysis = useMutation({
     mutationFn: async () => {
-      return await apiRequest("POST", `/api/projects/${projectId}/analysis/narrative`, {
+      const res = await apiRequest("POST", `/api/projects/${projectId}/analysis/narrative`, {
         targetPacing: "moderate"
       });
+      return await res.json();
     },
     onError: (error: any) => {
       if (error?.requiresUpgrade) {
@@ -212,7 +216,7 @@ export default function AdvancedAnalysisModal({
   };
 
   const renderStyleAnalysis = () => {
-    const data = styleAnalysis.data?.data;
+    const data = styleAnalysis.data;
     if (!data && !styleAnalysis.isPending) {
       return (
         <div className="text-center py-12">
@@ -364,7 +368,7 @@ export default function AdvancedAnalysisModal({
   };
 
   const renderPlotAnalysis = () => {
-    const data = plotAnalysis.data?.data;
+    const data = plotAnalysis.data;
     if (!data && !plotAnalysis.isPending) {
       return (
         <div className="text-center py-12">
@@ -527,7 +531,7 @@ export default function AdvancedAnalysisModal({
   };
 
   const renderCharacterAnalysis = () => {
-    const data = characterAnalysis.data?.data;
+    const data = characterAnalysis.data;
     
     if (!selectedCharacter) {
       return (
@@ -760,7 +764,7 @@ export default function AdvancedAnalysisModal({
   };
 
   const renderNarrativeAnalysis = () => {
-    const data = narrativeAnalysis.data?.data;
+    const data = narrativeAnalysis.data;
     
     if (!data && !narrativeAnalysis.isPending) {
       return (
