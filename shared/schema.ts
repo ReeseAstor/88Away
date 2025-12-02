@@ -409,6 +409,7 @@ export const documentComments = pgTable("document_comments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   documentId: varchar("document_id").notNull().references(() => documents.id, { onDelete: 'cascade' }),
   authorId: varchar("author_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  parentId: varchar("parent_id").references(() => documentComments.id, { onDelete: 'cascade' }),
   content: text("content").notNull(),
   range: jsonb("range"), // { start: number, end: number } for text selection
   resolved: boolean("resolved").default(false),
