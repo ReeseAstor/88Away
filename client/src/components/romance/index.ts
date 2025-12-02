@@ -21,6 +21,7 @@ export { CoverDesignStudio } from './cover-design-studio';
 export { BlurbGenerator } from './blurb-generator';
 export { KDPPublisher } from './kdp-publisher';
 export { MetadataOptimizer } from './metadata-optimizer';
+export { ImageUpscaler } from './image-upscaler';
 
 // Enterprise Features
 export { ClientPortfolio } from './client-portfolio';
