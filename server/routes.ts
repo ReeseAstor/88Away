@@ -2938,6 +2938,118 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Image Upscale Routes
+  app.post('/api/upscale', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { imageBase64, scale, width, height, quality, format, enhanceSharpness, denoise } = req.body;
+
+      // Validate input
+      if (!imageBase64) {
+        return res.status(400).json({ message: "imageBase64 is required" });
+      }
+
+      // Check user's AI usage limits (upscaling counts as a generation)
+      const user = await storage.getUser(userId);
+      const plan = user?.subscriptionPlan || 'free';
+      const usageCount = await storage.getUserAIUsageCount(userId);
+      
+      const { AI_LIMITS } = await import("./openai");
+      const limit = AI_LIMITS[plan as keyof typeof AI_LIMITS].monthly_generations;
+      
+      if (limit !== -1 && usageCount >= limit) {
+        return res.status(403).json({ 
+          message: `Monthly usage limit reached (${limit} generations). Please upgrade your plan.`,
+          requiresUpgrade: true
+        });
+      }
+
+      // Perform upscaling
+      const { upscaleImage } = await import("./upscale");
+      const result = await upscaleImage({
+        imageBase64,
+        scale: scale || 2,
+        width,
+        height,
+        quality: quality || 90,
+        format: format || 'jpeg',
+        enhanceSharpness: enhanceSharpness || false,
+        denoise: denoise || false,
+      });
+
+      if (!result.success) {
+        return res.status(500).json({ message: result.error || "Upscaling failed" });
+      }
+
+      // Increment usage
+      await storage.incrementAIUsage(userId, null, 'upscale');
+
+      res.json(result);
+    } catch (error) {
+      console.error("Image upscaling failed:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to upscale image" 
+      });
+    }
+  });
+
+  app.post('/api/upscale/batch', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { images } = req.body;
+
+      if (!Array.isArray(images) || images.length === 0) {
+        return res.status(400).json({ message: "Images array is required" });
+      }
+
+      if (images.length > 5) {
+        return res.status(400).json({ message: "Maximum 5 images per batch" });
+      }
+
+      // Check user's usage limits
+      const user = await storage.getUser(userId);
+      const plan = user?.subscriptionPlan || 'free';
+      const usageCount = await storage.getUserAIUsageCount(userId);
+      
+      const { AI_LIMITS } = await import("./openai");
+      const limit = AI_LIMITS[plan as keyof typeof AI_LIMITS].monthly_generations;
+      
+      if (limit !== -1 && usageCount + images.length > limit) {
+        return res.status(403).json({ 
+          message: `Batch would exceed monthly usage limit (${limit} generations). Please upgrade your plan.`,
+          requiresUpgrade: true
+        });
+      }
+
+      // Perform batch upscaling
+      const { batchUpscaleImages } = await import("./upscale");
+      const results = await batchUpscaleImages(images);
+
+      // Increment usage for each image
+      for (let i = 0; i < images.length; i++) {
+        await storage.incrementAIUsage(userId, null, 'upscale');
+      }
+
+      res.json({ results });
+    } catch (error) {
+      console.error("Batch upscaling failed:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to process batch upscaling" 
+      });
+    }
+  });
+
+  app.get('/api/upscale/options', isAuthenticated, async (req: any, res) => {
+    try {
+      const { getUpscaleOptions } = await import("./upscale");
+      const options = getUpscaleOptions();
+      res.json(options);
+    } catch (error) {
+      console.error("Failed to fetch upscale options:", error);
+      res.status(500).json({ message: "Failed to fetch upscale options" });
+    }
+  });
+
   // Advanced Analysis Routes
   app.post('/api/projects/:id/analysis/style', isAuthenticated, async (req: any, res) => {
     try {
