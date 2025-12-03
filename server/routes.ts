@@ -3002,8 +3002,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Images array is required" });
       }
 
-      if (images.length > 5) {
-        return res.status(400).json({ message: "Maximum 5 images per batch" });
+      if (images.length > 3) {
+        return res.status(400).json({ message: "Maximum 3 images per batch (serverless limit)" });
       }
 
       // Check user's usage limits
