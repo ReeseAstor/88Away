@@ -8,7 +8,14 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, Download, ZoomIn, Sparkles, Image as ImageIcon, RefreshCw } from 'lucide-react';
+import { Upload, Download, ZoomIn, Sparkles, Image as ImageIcon, RefreshCw, AlertCircle } from 'lucide-react';
+
+// Vercel serverless limits
+const LIMITS = {
+  maxFileSizeMB: 4,
+  maxScale: 3,
+  maxOutputDimension: 4096,
+} as const;
 
 interface UpscaleResult {
   success: boolean;
@@ -60,6 +67,17 @@ export function ImageUpscaler({ onUpscaleComplete, initialImage, className }: Im
       toast({
         title: 'Invalid file type',
         description: 'Please select an image file (JPEG, PNG, or WebP)',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Check file size for serverless limits
+    const fileSizeMB = file.size / (1024 * 1024);
+    if (fileSizeMB > LIMITS.maxFileSizeMB) {
+      toast({
+        title: 'File too large',
+        description: `Maximum file size is ${LIMITS.maxFileSizeMB}MB. Your file is ${fileSizeMB.toFixed(1)}MB.`,
         variant: 'destructive',
       });
       return;
@@ -232,9 +250,13 @@ export function ImageUpscaler({ onUpscaleComplete, initialImage, className }: Im
               <p className="text-lg font-medium text-gray-700 mb-2">
                 Drop an image here or click to upload
               </p>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-gray-500 mb-3">
                 Supports JPEG, PNG, and WebP formats
               </p>
+              <div className="inline-flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded">
+                <AlertCircle className="h-3 w-3" />
+                Max {LIMITS.maxFileSizeMB}MB · Up to {LIMITS.maxScale}x scale
+              </div>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -302,13 +324,13 @@ export function ImageUpscaler({ onUpscaleComplete, initialImage, className }: Im
                     value={[scale]}
                     onValueChange={([value]) => setScale(value)}
                     min={1.5}
-                    max={4}
+                    max={LIMITS.maxScale}
                     step={0.5}
                     className="w-full"
                   />
                   {originalDimensions && (
                     <p className="text-xs text-gray-500">
-                      Output: {Math.round(originalDimensions.width * scale)} x {Math.round(originalDimensions.height * scale)}
+                      Output: {Math.min(Math.round(originalDimensions.width * scale), LIMITS.maxOutputDimension)} x {Math.min(Math.round(originalDimensions.height * scale), LIMITS.maxOutputDimension)}
                     </p>
                   )}
                 </div>
