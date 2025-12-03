@@ -48,9 +48,9 @@ export function ImageUpscaler({ onUpscaleComplete, initialImage, className }: Im
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   
-  // Upscale settings
+  // Upscale settings (Vercel-optimized defaults)
   const [scale, setScale] = useState(2);
-  const [quality, setQuality] = useState(90);
+  const [quality, setQuality] = useState(85);
   const [format, setFormat] = useState<'jpeg' | 'png' | 'webp'>('jpeg');
   const [enhanceSharpness, setEnhanceSharpness] = useState(true);
   const [denoise, setDenoise] = useState(false);
