@@ -1,11 +1,26 @@
 import sharp from 'sharp';
-import path from 'path';
-import fs from 'fs';
+
+/**
+ * Vercel Serverless Optimized Image Upscaler
+ * 
+ * Constraints addressed:
+ * - No filesystem access (base64 only)
+ * - Memory limit: 1024MB default, 3008MB max
+ * - Execution time: 10s default, 60s max (Pro)
+ * - Payload size: 4.5MB request body limit
+ */
+
+// Vercel-optimized limits
+const VERCEL_LIMITS = {
+  maxInputSizeMB: 4, // Stay under 4.5MB payload limit
+  maxOutputDimension: 4096, // Reduced for memory efficiency
+  maxScale: 3, // Cap scale to prevent memory issues
+  timeoutMs: 25000, // Leave buffer before Vercel timeout
+} as const;
 
 export interface UpscaleRequest {
-  imageBase64?: string;
-  imagePath?: string;
-  scale?: number; // 2x, 3x, 4x
+  imageBase64: string; // Required - no filesystem on Vercel
+  scale?: number; // 1.5x, 2x, 3x (max)
   width?: number;
   height?: number;
   quality?: number; // 1-100
@@ -31,31 +46,82 @@ export interface UpscaleResponse {
 }
 
 /**
- * Upscale an image using sharp with optional enhancements
+ * Validate input size for Vercel limits
+ */
+function validateInputSize(base64Data: string): void {
+  const sizeInBytes = Buffer.byteLength(base64Data, 'base64');
+  const sizeInMB = sizeInBytes / (1024 * 1024);
+  
+  if (sizeInMB > VERCEL_LIMITS.maxInputSizeMB) {
+    throw new Error(`Image too large (${sizeInMB.toFixed(2)}MB). Maximum size is ${VERCEL_LIMITS.maxInputSizeMB}MB for serverless deployment.`);
+  }
+}
+
+/**
+ * Calculate safe dimensions for Vercel memory limits
+ */
+function calculateSafeDimensions(
+  originalWidth: number,
+  originalHeight: number,
+  requestedScale: number,
+  requestedWidth?: number,
+  requestedHeight?: number
+): { width: number; height: number; actualScale: number } {
+  // Cap scale to Vercel-safe maximum
+  const safeScale = Math.min(requestedScale, VERCEL_LIMITS.maxScale);
+  
+  let targetWidth = requestedWidth || Math.round(originalWidth * safeScale);
+  let targetHeight = requestedHeight || Math.round(originalHeight * safeScale);
+  
+  // Cap to max dimension
+  const maxDim = VERCEL_LIMITS.maxOutputDimension;
+  if (targetWidth > maxDim || targetHeight > maxDim) {
+    const ratio = Math.min(maxDim / targetWidth, maxDim / targetHeight);
+    targetWidth = Math.round(targetWidth * ratio);
+    targetHeight = Math.round(targetHeight * ratio);
+  }
+  
+  // Estimate memory usage (4 bytes per pixel RGBA * 2 for input/output)
+  const estimatedMemoryMB = (targetWidth * targetHeight * 4 * 2) / (1024 * 1024);
+  const maxMemoryMB = 512; // Conservative limit for serverless
+  
+  if (estimatedMemoryMB > maxMemoryMB) {
+    const reductionRatio = Math.sqrt(maxMemoryMB / estimatedMemoryMB);
+    targetWidth = Math.round(targetWidth * reductionRatio);
+    targetHeight = Math.round(targetHeight * reductionRatio);
+  }
+  
+  return {
+    width: targetWidth,
+    height: targetHeight,
+    actualScale: targetWidth / originalWidth,
+  };
+}
+
+/**
+ * Upscale an image using sharp - optimized for Vercel serverless
  */
 export async function upscaleImage(request: UpscaleRequest): Promise<UpscaleResponse> {
   const startTime = Date.now();
 
   try {
     // Validate input
-    if (!request.imageBase64 && !request.imagePath) {
-      throw new Error('Either imageBase64 or imagePath must be provided');
+    if (!request.imageBase64) {
+      throw new Error('imageBase64 is required for serverless deployment');
     }
 
-    // Get image buffer
-    let inputBuffer: Buffer;
-    if (request.imageBase64) {
-      // Remove data URL prefix if present
-      const base64Data = request.imageBase64.replace(/^data:image\/\w+;base64,/, '');
-      inputBuffer = Buffer.from(base64Data, 'base64');
-    } else if (request.imagePath) {
-      if (!fs.existsSync(request.imagePath)) {
-        throw new Error('Image file not found');
-      }
-      inputBuffer = fs.readFileSync(request.imagePath);
-    } else {
-      throw new Error('No image data provided');
-    }
+    // Remove data URL prefix if present
+    const base64Data = request.imageBase64.replace(/^data:image\/\w+;base64,/, '');
+    
+    // Validate size for Vercel limits
+    validateInputSize(base64Data);
+    
+    // Convert to buffer
+    const inputBuffer = Buffer.from(base64Data, 'base64');
+
+    // Configure sharp for serverless (limit concurrency and cache)
+    sharp.cache({ memory: 50, files: 0, items: 0 });
+    sharp.concurrency(1);
 
     // Get original image metadata
     const originalMetadata = await sharp(inputBuffer).metadata();
@@ -66,41 +132,36 @@ export async function upscaleImage(request: UpscaleRequest): Promise<UpscaleResp
       throw new Error('Could not determine image dimensions');
     }
 
-    // Calculate target dimensions
-    const scale = request.scale || 2;
-    let targetWidth = request.width || Math.round(originalWidth * scale);
-    let targetHeight = request.height || Math.round(originalHeight * scale);
-
-    // Cap maximum dimensions to prevent memory issues
-    const maxDimension = 8192;
-    if (targetWidth > maxDimension) {
-      const ratio = maxDimension / targetWidth;
-      targetWidth = maxDimension;
-      targetHeight = Math.round(targetHeight * ratio);
-    }
-    if (targetHeight > maxDimension) {
-      const ratio = maxDimension / targetHeight;
-      targetHeight = maxDimension;
-      targetWidth = Math.round(targetWidth * ratio);
-    }
+    // Calculate safe dimensions
+    const { width: targetWidth, height: targetHeight, actualScale } = calculateSafeDimensions(
+      originalWidth,
+      originalHeight,
+      request.scale || 2,
+      request.width,
+      request.height
+    );
 
     // Set output format and quality
     const format = request.format || (originalMetadata.format as 'jpeg' | 'png' | 'webp') || 'jpeg';
-    const quality = request.quality || 90;
+    const quality = request.quality || 85; // Slightly lower default for faster processing
 
-    // Build sharp pipeline
-    let pipeline = sharp(inputBuffer)
+    // Build optimized sharp pipeline
+    let pipeline = sharp(inputBuffer, {
+      limitInputPixels: 268402689, // ~16384x16384
+      sequentialRead: true, // Memory optimization
+    })
       .resize(targetWidth, targetHeight, {
-        kernel: sharp.kernel.lanczos3, // High-quality upscaling
+        kernel: sharp.kernel.lanczos3,
         fit: 'fill',
+        fastShrinkOnLoad: true, // Faster processing
       });
 
-    // Apply optional enhancements
+    // Apply optional enhancements (lighter settings for speed)
     if (request.enhanceSharpness) {
       pipeline = pipeline.sharpen({
-        sigma: 1.0,
-        m1: 1.0,
-        m2: 0.5,
+        sigma: 0.8,
+        m1: 0.8,
+        m2: 0.4,
       });
     }
 
@@ -108,17 +169,33 @@ export async function upscaleImage(request: UpscaleRequest): Promise<UpscaleResp
       pipeline = pipeline.median(3);
     }
 
-    // Apply format-specific settings
+    // Apply format-specific settings optimized for speed
     switch (format) {
       case 'jpeg':
-        pipeline = pipeline.jpeg({ quality, mozjpeg: true });
+        pipeline = pipeline.jpeg({ 
+          quality, 
+          mozjpeg: false, // Faster than mozjpeg
+          chromaSubsampling: '4:2:0',
+        });
         break;
       case 'png':
-        pipeline = pipeline.png({ quality, compressionLevel: 6 });
+        pipeline = pipeline.png({ 
+          compressionLevel: 4, // Faster compression
+          adaptiveFiltering: false,
+        });
         break;
       case 'webp':
-        pipeline = pipeline.webp({ quality, effort: 4 });
+        pipeline = pipeline.webp({ 
+          quality, 
+          effort: 2, // Faster encoding
+          smartSubsample: false,
+        });
         break;
+    }
+
+    // Check timeout before processing
+    if (Date.now() - startTime > VERCEL_LIMITS.timeoutMs) {
+      throw new Error('Processing timeout - image may be too complex');
     }
 
     // Process image
@@ -135,7 +212,7 @@ export async function upscaleImage(request: UpscaleRequest): Promise<UpscaleResp
         originalHeight,
         newWidth: targetWidth,
         newHeight: targetHeight,
-        scale: targetWidth / originalWidth,
+        scale: actualScale,
         format,
         processingTime,
         fileSizeBytes: outputBuffer.length,
@@ -160,31 +237,43 @@ export async function upscaleImage(request: UpscaleRequest): Promise<UpscaleResp
 }
 
 /**
- * Batch upscale multiple images
+ * Batch upscale multiple images - limited for Vercel
+ * Max 3 images per batch to stay within execution time limits
  */
 export async function batchUpscaleImages(
   requests: UpscaleRequest[]
 ): Promise<UpscaleResponse[]> {
   const results: UpscaleResponse[] = [];
+  const maxBatchSize = 3; // Vercel-safe batch size
+
+  // Limit batch size
+  const limitedRequests = requests.slice(0, maxBatchSize);
 
   // Process images sequentially to manage memory
-  for (const request of requests) {
+  for (const request of limitedRequests) {
     const result = await upscaleImage(request);
     results.push(result);
+    
+    // Clear sharp cache between images
+    sharp.cache(false);
+    sharp.cache({ memory: 50, files: 0, items: 0 });
   }
 
   return results;
 }
 
 /**
- * Get supported upscale options
+ * Get supported upscale options - Vercel optimized
  */
 export function getUpscaleOptions() {
   return {
-    scales: [1.5, 2, 3, 4],
+    scales: [1.5, 2, 2.5, 3], // Max 3x for Vercel
     formats: ['jpeg', 'png', 'webp'],
-    maxDimension: 8192,
-    qualityRange: { min: 1, max: 100, default: 90 },
+    maxInputSizeMB: VERCEL_LIMITS.maxInputSizeMB,
+    maxOutputDimension: VERCEL_LIMITS.maxOutputDimension,
+    maxBatchSize: 3,
+    qualityRange: { min: 50, max: 100, default: 85 },
     enhancements: ['sharpness', 'denoise'],
+    serverless: true,
   };
 }
