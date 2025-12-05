@@ -1,0 +1,60 @@
+# Dependencies
+node_modules
+npm-debug.log*
+
+# Development
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.replit
+.qoder
+.local
+
+# Build artifacts
+*.log
+*.pid
+*.seed
+*.pid.lock
+
+# Testing
+coverage
+.nyc_output
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation
+*.md
+!README.md
+docs
+
+# Docker
+Dockerfile
+docker-compose*.yml
+nginx
+
+# Git
+.git
+.gitignore
+.github
+
+# Test files
+tests
+test-*.ts
+*.test.ts
+*.spec.ts
+
+# Temporary files
+attached_assets
+tmp
+temp
