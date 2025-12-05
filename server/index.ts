@@ -12,8 +12,10 @@ import { EventStreamService } from "./events/eventStream";
 const app = express();
 
 // Enable gzip compression for all responses
+// Note: Custom header 'x-no-compression' can be used to bypass compression if needed
 app.use(compression({
   filter: (req, res) => {
+    // Allow bypassing compression with custom header for specific use cases
     if (req.headers['x-no-compression']) {
       return false;
     }

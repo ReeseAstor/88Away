@@ -63,7 +63,7 @@ export default defineConfig({
     },
     assetsInlineLimit: 4096, // Inline assets smaller than 4kb
     cssCodeSplit: true,
-    sourcemap: false, // Disable sourcemaps in production for smaller builds
+    sourcemap: process.env.NODE_ENV !== 'production', // Only disable sourcemaps in production
   },
   server: {
     fs: {
