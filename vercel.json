@@ -1,0 +1,84 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "version": 2,
+  "buildCommand": "npm run build:vercel",
+  "installCommand": "PUPPETEER_SKIP_DOWNLOAD=true npm install",
+  "outputDirectory": "dist/public",
+  "builds": [
+    {
+      "src": "dist/index.js",
+      "use": "@vercel/node",
+      "config": {
+        "maxDuration": 30
+      }
+    },
+    {
+      "src": "dist/public/**",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/assets/(.*)",
+      "headers": {
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "dest": "/assets/$1"
+    },
+    {
+      "src": "/api/(.*)",
+      "dest": "/dist/index.js"
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/(.*\\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot))",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-XSS-Protection",
+          "value": "1; mode=block"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        }
+      ]
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  }
+}

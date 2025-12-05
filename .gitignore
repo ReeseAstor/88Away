@@ -4,3 +4,16 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+
+# Vercel
+.vercel
+
+# Build artifacts
+*.log
+*.pid
+.cache
+.vite
+
+# Environment
+.env.local
+.env.*.local
