@@ -263,6 +263,8 @@ export function ImageUpscaler({ onUpscaleComplete, initialImage, className }: Im
                 accept="image/jpeg,image/png,image/webp"
                 onChange={handleFileSelect}
                 className="hidden"
+                aria-label="Upload image"
+                title="Upload image"
               />
             </div>
           ) : (
