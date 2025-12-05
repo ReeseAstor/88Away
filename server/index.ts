@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
+import compression from "compression";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { CollaborationService } from "./collaboration";
@@ -9,6 +10,18 @@ import { WebSocketGateway } from "./events/websocketGateway";
 import { EventStreamService } from "./events/eventStream";
 
 const app = express();
+
+// Enable gzip compression for all responses
+app.use(compression({
+  filter: (req, res) => {
+    if (req.headers['x-no-compression']) {
+      return false;
+    }
+    return compression.filter(req, res);
+  },
+  level: 6 // Balance between compression speed and ratio
+}));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 

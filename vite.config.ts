@@ -61,6 +61,9 @@ export default defineConfig({
         drop_debugger: true,
       },
     },
+    assetsInlineLimit: 4096, // Inline assets smaller than 4kb
+    cssCodeSplit: true,
+    sourcemap: false, // Disable sourcemaps in production for smaller builds
   },
   server: {
     fs: {
