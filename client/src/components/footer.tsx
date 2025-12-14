@@ -12,6 +12,9 @@ export function Footer() {
               © 2025 88Away. All rights reserved.
             </p>
             <div className="flex gap-6 text-sm">
+              <Link href="/newsletter" className="text-muted-foreground hover:text-foreground">
+                KDP Trends Newsletter
+              </Link>
               <Link data-testid="link-privacy" href="/privacy" className="text-muted-foreground hover:text-foreground">
                 Privacy Policy
               </Link>

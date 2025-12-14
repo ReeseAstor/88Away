@@ -21,6 +21,8 @@ import SmsPage from "@/pages/sms";
 import Privacy from "@/pages/privacy";
 import Terms from "@/pages/terms";
 import Cookies from "@/pages/cookies";
+import NewsletterArchivePage from "@/pages/newsletter";
+import NewsletterIssuePage from "@/pages/newsletter-issue";
 import NotFound from "@/pages/not-found";
 // Romance-specific pages
 import RomanceSeriesPage from "@/pages/romance/series";
@@ -36,6 +38,9 @@ function Router() {
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />
       <Route path="/cookies" component={Cookies} />
+      {/* Public newsletter blog/archive */}
+      <Route path="/newsletter" component={NewsletterArchivePage} />
+      <Route path="/newsletter/:slug" component={NewsletterIssuePage} />
       {isLoading || !isAuthenticated ? (
         <Route path="/" component={Landing} />
       ) : (

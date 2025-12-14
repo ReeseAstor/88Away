@@ -566,6 +566,43 @@ export const sms = pgTable("sms", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Newsletter subscriber status enum (public newsletter audience)
+export const newsletterSubscriberStatusEnum = pgEnum('newsletter_subscriber_status', [
+  'subscribed',
+  'unsubscribed',
+]);
+
+// Newsletter subscribers (public email list)
+export const newsletterSubscribers = pgTable("newsletter_subscribers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: varchar("email").notNull().unique(),
+  status: newsletterSubscriberStatusEnum("status").notNull().default('subscribed'),
+  unsubscribeToken: varchar("unsubscribe_token").notNull(),
+  subscribedAt: timestamp("subscribed_at").defaultNow(),
+  unsubscribedAt: timestamp("unsubscribed_at"),
+  metadata: jsonb("metadata").$type<Record<string, any>>(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Newsletter editions (blog/archive + email content)
+export const newsletterEditions = pgTable("newsletter_editions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  // e.g. "kdp-fiction-trends-2025-12-14"
+  slug: varchar("slug").notNull().unique(),
+  issueDate: varchar("issue_date").notNull(), // YYYY-MM-DD
+  title: text("title").notNull(),
+  summary: text("summary"),
+  htmlContent: text("html_content").notNull(),
+  textContent: text("text_content").notNull(),
+  publishedAt: timestamp("published_at").defaultNow(),
+  metadata: jsonb("metadata").$type<Record<string, any>>(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_newsletter_editions_issue_date").on(table.issueDate),
+]);
+
 // Expert mode enum
 export const expertModeEnum = pgEnum('expert_mode', ['academic', 'finance', 'law', 'marketing']);
 
@@ -1109,6 +1146,19 @@ export const insertSmsSchema = createInsertSchema(sms).omit({
   updatedAt: true,
 });
 
+// Newsletter insert schemas
+export const insertNewsletterSubscriberSchema = createInsertSchema(newsletterSubscribers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertNewsletterEditionSchema = createInsertSchema(newsletterEditions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // OCR insert schema
 export const insertOCRRecordSchema = createInsertSchema(ocrRecords).omit({
   id: true,
@@ -1214,6 +1264,12 @@ export type InsertEmail = z.infer<typeof insertEmailSchema>;
 // SMS types
 export type Sms = typeof sms.$inferSelect;
 export type InsertSms = z.infer<typeof insertSmsSchema>;
+
+// Newsletter types
+export type NewsletterSubscriber = typeof newsletterSubscribers.$inferSelect;
+export type InsertNewsletterSubscriber = z.infer<typeof insertNewsletterSubscriberSchema>;
+export type NewsletterEdition = typeof newsletterEditions.$inferSelect;
+export type InsertNewsletterEdition = z.infer<typeof insertNewsletterEditionSchema>;
 
 // OCR types
 export type OCRRecord = typeof ocrRecords.$inferSelect;
