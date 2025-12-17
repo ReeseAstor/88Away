@@ -106,6 +106,56 @@ export async function sendEmail(params: SendEmailParams) {
   return emailRecord[0];
 }
 
+/**
+ * Send a transactional email via Brevo without writing to the local `emails` table.
+ * Useful for system-wide broadcasts (e.g. public newsletter) where there is no
+ * per-user owner in the app DB.
+ */
+export async function sendEmailRaw(params: Omit<SendEmailParams, "userId"> & { userId?: never }) {
+  const {
+    to,
+    subject,
+    htmlContent,
+    textContent,
+    cc,
+    bcc,
+    templateId,
+    templateParams,
+  } = params;
+
+  const client = getBrevoClient();
+
+  const sendSmtpEmail = new brevo.SendSmtpEmail();
+  sendSmtpEmail.to = to.map(email => ({ email }));
+  sendSmtpEmail.subject = subject;
+  sendSmtpEmail.htmlContent = htmlContent;
+
+  if (textContent) {
+    sendSmtpEmail.textContent = textContent;
+  }
+
+  if (cc && cc.length > 0) {
+    sendSmtpEmail.cc = cc.map(email => ({ email }));
+  }
+
+  if (bcc && bcc.length > 0) {
+    sendSmtpEmail.bcc = bcc.map(email => ({ email }));
+  }
+
+  if (templateId) {
+    sendSmtpEmail.templateId = templateId;
+  }
+
+  if (templateParams) {
+    sendSmtpEmail.params = templateParams;
+  }
+
+  const response = await client.sendTransacEmail(sendSmtpEmail);
+  return {
+    messageId: (response.body as any)?.messageId || null,
+  };
+}
+
 interface BatchEmailParams {
   userId: string;
   emails: Array<{

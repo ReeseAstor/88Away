@@ -21,6 +21,8 @@ import {
   ocrRecords,
   revenueEntries,
   kdpMetadata,
+  newsletterSubscribers,
+  newsletterEditions,
   type User,
   type UpsertUser,
   type Project,
@@ -62,10 +64,15 @@ import {
   type InsertOCRRecord,
   type RevenueEntry,
   type InsertRevenueEntry,
+  type NewsletterSubscriber,
+  type InsertNewsletterSubscriber,
+  type NewsletterEdition,
+  type InsertNewsletterEdition,
 } from "@shared/schema";
 import { calculateWordCount } from "@shared/utils";
 import { db } from "./db";
 import { eq, and, desc, asc, lt, sql, or, inArray } from "drizzle-orm";
+import { randomBytes } from "crypto";
 
 export interface IStorage {
   // Session operations
@@ -218,6 +225,16 @@ export interface IStorage {
   createRevenueEntry(data: any, userId: string): Promise<any>;
   getRomanceRevenue(userId: string, timeframe?: string): Promise<any>;
   updateUser(userId: string, updates: Partial<User>): Promise<User>;
+
+  // Newsletter (public)
+  upsertNewsletterSubscriber(email: string, metadata?: Record<string, any>): Promise<NewsletterSubscriber>;
+  unsubscribeNewsletterSubscriberByToken(token: string): Promise<NewsletterSubscriber | null>;
+  listNewsletterSubscribers(status?: 'subscribed' | 'unsubscribed'): Promise<NewsletterSubscriber[]>;
+  createNewsletterEdition(data: InsertNewsletterEdition): Promise<NewsletterEdition>;
+  getNewsletterEditionBySlug(slug: string): Promise<NewsletterEdition | undefined>;
+  getNewsletterEditionByIssueDate(issueDate: string): Promise<NewsletterEdition | undefined>;
+  getLatestNewsletterEdition(): Promise<NewsletterEdition | undefined>;
+  listNewsletterEditions(limit?: number): Promise<NewsletterEdition[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1778,6 +1795,109 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, userId))
       .returning();
     return user;
+  }
+
+  // Newsletter (public)
+  async upsertNewsletterSubscriber(email: string, metadata: Record<string, any> = {}): Promise<NewsletterSubscriber> {
+    const normalizedEmail = email.trim().toLowerCase();
+    const unsubscribeToken = randomBytes(24).toString("hex");
+
+    const [subscriber] = await db
+      .insert(newsletterSubscribers)
+      .values({
+        email: normalizedEmail,
+        status: 'subscribed',
+        unsubscribeToken,
+        subscribedAt: new Date(),
+        unsubscribedAt: null,
+        metadata,
+        updatedAt: new Date(),
+      } as unknown as InsertNewsletterSubscriber)
+      .onConflictDoUpdate({
+        target: newsletterSubscribers.email,
+        set: {
+          status: 'subscribed',
+          // rotate token to invalidate older unsubscribe links on re-subscribe
+          unsubscribeToken,
+          subscribedAt: sql`COALESCE(${newsletterSubscribers.subscribedAt}, NOW())`,
+          unsubscribedAt: null,
+          metadata,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+
+    return subscriber;
+  }
+
+  async unsubscribeNewsletterSubscriberByToken(token: string): Promise<NewsletterSubscriber | null> {
+    const [updated] = await db
+      .update(newsletterSubscribers)
+      .set({
+        status: 'unsubscribed',
+        unsubscribedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(newsletterSubscribers.unsubscribeToken, token))
+      .returning();
+
+    return updated || null;
+  }
+
+  async listNewsletterSubscribers(status: 'subscribed' | 'unsubscribed' = 'subscribed'): Promise<NewsletterSubscriber[]> {
+    return db
+      .select()
+      .from(newsletterSubscribers)
+      .where(eq(newsletterSubscribers.status, status))
+      .orderBy(desc(newsletterSubscribers.updatedAt));
+  }
+
+  async createNewsletterEdition(data: InsertNewsletterEdition): Promise<NewsletterEdition> {
+    const [created] = await db
+      .insert(newsletterEditions)
+      .values({
+        ...data,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as any)
+      .returning();
+    return created;
+  }
+
+  async getNewsletterEditionBySlug(slug: string): Promise<NewsletterEdition | undefined> {
+    const [edition] = await db
+      .select()
+      .from(newsletterEditions)
+      .where(eq(newsletterEditions.slug, slug))
+      .limit(1);
+    return edition;
+  }
+
+  async getNewsletterEditionByIssueDate(issueDate: string): Promise<NewsletterEdition | undefined> {
+    const [edition] = await db
+      .select()
+      .from(newsletterEditions)
+      .where(eq(newsletterEditions.issueDate, issueDate))
+      .orderBy(desc(newsletterEditions.publishedAt))
+      .limit(1);
+    return edition;
+  }
+
+  async getLatestNewsletterEdition(): Promise<NewsletterEdition | undefined> {
+    const [edition] = await db
+      .select()
+      .from(newsletterEditions)
+      .orderBy(desc(newsletterEditions.publishedAt))
+      .limit(1);
+    return edition;
+  }
+
+  async listNewsletterEditions(limit: number = 30): Promise<NewsletterEdition[]> {
+    return db
+      .select()
+      .from(newsletterEditions)
+      .orderBy(desc(newsletterEditions.publishedAt))
+      .limit(limit);
   }
 }
 

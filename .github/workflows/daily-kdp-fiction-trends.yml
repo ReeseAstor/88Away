@@ -1,0 +1,30 @@
+name: Daily KDP Fiction Trend Newsletter
+
+on:
+  schedule:
+    # 07:05 UTC every day
+    - cron: "5 7 * * *"
+  workflow_dispatch:
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger newsletter generation + send
+        env:
+          NEWSLETTER_CRON_URL: ${{ secrets.NEWSLETTER_CRON_URL }}
+          NEWSLETTER_CRON_SECRET: ${{ secrets.NEWSLETTER_CRON_SECRET }}
+        run: |
+          if [ -z "$NEWSLETTER_CRON_URL" ]; then
+            echo "Missing NEWSLETTER_CRON_URL secret" >&2
+            exit 1
+          fi
+          if [ -z "$NEWSLETTER_CRON_SECRET" ]; then
+            echo "Missing NEWSLETTER_CRON_SECRET secret" >&2
+            exit 1
+          fi
+          curl -fsSL -X POST \
+            -H "content-type: application/json" \
+            -H "x-cron-secret: ${NEWSLETTER_CRON_SECRET}" \
+            --data '{"force": false}' \
+            "${NEWSLETTER_CRON_URL}"

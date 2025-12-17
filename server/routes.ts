@@ -52,6 +52,7 @@ import { logActivity, getUserDisplayName } from "./activities";
 import { 
   sendEmail, 
   sendBatchEmails, 
+  sendEmailRaw,
   scheduleEmail, 
   getEmailStatus, 
   listUserEmails 
@@ -64,6 +65,7 @@ import {
   getSmsById,
 } from "./brevoSmsService";
 import realtimeRouter from './realtime-api';
+import { generateDailyKdpFictionTrendsEdition } from "./newsletter/kdpFictionTrends";
 
 let stripe: Stripe | null = null;
 
@@ -4533,6 +4535,164 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(result);
     } catch (error: any) {
       return res.status(400).send({ error: { message: error.message } });
+    }
+  });
+
+  /**
+   * Public newsletter endpoints (KDP fiction trends)
+   */
+  const newsletterSubscribeSchema = z.object({
+    email: z.string().email(),
+    metadata: z.record(z.any()).optional(),
+  });
+
+  app.post('/api/newsletter/subscribe', async (req, res) => {
+    try {
+      const parsed = newsletterSubscribeSchema.parse(req.body);
+      const subscriber = await storage.upsertNewsletterSubscriber(parsed.email, parsed.metadata || {});
+      res.json({ ok: true, subscriber: { email: subscriber.email, status: subscriber.status } });
+    } catch (error: any) {
+      const message = error?.errors ? fromZodError(error).message : (error?.message || "Failed to subscribe");
+      res.status(400).json({ ok: false, message });
+    }
+  });
+
+  app.get('/api/newsletter/unsubscribe', async (req, res) => {
+    try {
+      const token = String(req.query.token || "");
+      if (!token) {
+        return res.status(400).json({ ok: false, message: "Missing token" });
+      }
+
+      const updated = await storage.unsubscribeNewsletterSubscriberByToken(token);
+      const baseUrl = process.env.PUBLIC_BASE_URL || process.env.CLIENT_URL || "";
+      if (baseUrl) {
+        return res.redirect(302, `${baseUrl}/newsletter?unsubscribed=1`);
+      }
+
+      if (!updated) {
+        return res.status(404).json({ ok: false, message: "Subscriber not found" });
+      }
+      res.json({ ok: true });
+    } catch (error: any) {
+      res.status(500).json({ ok: false, message: error?.message || "Failed to unsubscribe" });
+    }
+  });
+
+  app.get('/api/newsletter/editions', async (req, res) => {
+    try {
+      const limit = req.query.limit ? Math.min(100, Math.max(1, parseInt(String(req.query.limit)))) : 30;
+      const editions = await storage.listNewsletterEditions(limit);
+      res.json(editions.map(e => ({
+        slug: e.slug,
+        issueDate: e.issueDate,
+        title: e.title,
+        summary: e.summary,
+        publishedAt: e.publishedAt,
+        metadata: e.metadata,
+      })));
+    } catch (error: any) {
+      res.status(500).json({ message: "Failed to list editions" });
+    }
+  });
+
+  app.get('/api/newsletter/editions/latest', async (req, res) => {
+    try {
+      const edition = await storage.getLatestNewsletterEdition();
+      if (!edition) return res.status(404).json({ message: "No editions yet" });
+      res.json(edition);
+    } catch (error: any) {
+      res.status(500).json({ message: "Failed to fetch latest edition" });
+    }
+  });
+
+  app.get('/api/newsletter/editions/:slug', async (req, res) => {
+    try {
+      const { slug } = req.params;
+      const edition = await storage.getNewsletterEditionBySlug(slug);
+      if (!edition) return res.status(404).json({ message: "Edition not found" });
+      res.json(edition);
+    } catch (error: any) {
+      res.status(500).json({ message: "Failed to fetch edition" });
+    }
+  });
+
+  app.post('/api/newsletter/kdp-trends/run', async (req, res) => {
+    try {
+      const expected = process.env.NEWSLETTER_CRON_SECRET;
+      const provided = req.header("x-cron-secret");
+      if (!expected || !provided || provided !== expected) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const date = req.body?.date ? new Date(req.body.date) : new Date();
+      if (Number.isNaN(date.getTime())) {
+        return res.status(400).json({ message: "Invalid date" });
+      }
+      const issueDate = date.toISOString().slice(0, 10);
+
+      const existing = await storage.getNewsletterEditionByIssueDate(issueDate);
+      if (existing && !req.body?.force) {
+        return res.json({ ok: true, edition: existing, sent: 0, skipped: true });
+      }
+
+      const baseUrl = process.env.PUBLIC_BASE_URL || process.env.CLIENT_URL || "";
+      const publicArchiveUrl = baseUrl ? `${baseUrl}/newsletter` : undefined;
+
+      const draft = await generateDailyKdpFictionTrendsEdition({ date, publicArchiveUrl });
+      const edition = await storage.createNewsletterEdition({
+        slug: draft.slug,
+        issueDate: draft.issueDate,
+        title: draft.title,
+        summary: draft.summary,
+        htmlContent: draft.htmlContent,
+        textContent: draft.textContent,
+        publishedAt: new Date(),
+        metadata: draft.metadata,
+      } as any);
+
+      const subscribers = await storage.listNewsletterSubscribers('subscribed');
+      const viewInBrowserUrl = baseUrl ? `${baseUrl}/newsletter/${edition.slug}` : undefined;
+
+      let sent = 0;
+      let failed = 0;
+
+      const concurrency = 10;
+      for (let i = 0; i < subscribers.length; i += concurrency) {
+        const batch = subscribers.slice(i, i + concurrency);
+        const results = await Promise.allSettled(
+          batch.map(async (sub) => {
+            const unsubscribeUrl = baseUrl
+              ? `${baseUrl}/api/newsletter/unsubscribe?token=${encodeURIComponent(sub.unsubscribeToken)}`
+              : `/api/newsletter/unsubscribe?token=${encodeURIComponent(sub.unsubscribeToken)}`;
+
+            const footer = `
+              <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb" />
+              <p style="font-size:12px;color:#6b7280;line-height:1.4">
+                ${viewInBrowserUrl ? `<a href="${viewInBrowserUrl}">View in browser</a> · ` : ""}
+                <a href="${unsubscribeUrl}">Unsubscribe</a>
+              </p>
+            `;
+
+            await sendEmailRaw({
+              to: [sub.email],
+              subject: edition.title,
+              htmlContent: `${edition.htmlContent}${footer}`,
+              textContent: `${edition.textContent}\n\n${viewInBrowserUrl ? `View in browser: ${viewInBrowserUrl}\n` : ""}Unsubscribe: ${unsubscribeUrl}\n`,
+            });
+          })
+        );
+
+        for (const r of results) {
+          if (r.status === "fulfilled") sent++;
+          else failed++;
+        }
+      }
+
+      res.json({ ok: true, edition, sent, failed });
+    } catch (error: any) {
+      console.error("Newsletter run error:", error);
+      res.status(500).json({ message: error?.message || "Failed to run newsletter" });
     }
   });
 
