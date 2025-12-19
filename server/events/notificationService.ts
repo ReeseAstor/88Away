@@ -91,7 +91,14 @@ export class NotificationService {
     this.eventStream = EventStreamService.getInstance();
     this.wsGateway = WebSocketGateway.getInstance();
     const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-    this.redis = new Redis(redisUrl);
+    // Use lazyConnect so we can attach error handlers before connecting.
+    this.redis = new Redis(redisUrl, { lazyConnect: true });
+    this.redis.on('error', (error) => {
+      console.warn('[NotificationService] Redis error:', error?.message || error);
+    });
+    this.redis.connect().catch((error) => {
+      console.warn('[NotificationService] Redis connect failed:', error?.message || error);
+    });
     
     this.setupDefaultAlertRules();
     this.setupDigestProcessing();

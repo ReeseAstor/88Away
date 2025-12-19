@@ -492,4 +492,14 @@ export class StripeMarketplaceService {
   }
 }
 
-export const stripeMarketplace = new StripeMarketplaceService();
+let stripeMarketplaceSingleton: StripeMarketplaceService | null = null;
+
+/**
+ * Lazily instantiate Stripe so missing Stripe config doesn't prevent the server
+ * from starting (non-marketplace endpoints should still work).
+ */
+export function getStripeMarketplace(): StripeMarketplaceService {
+  if (stripeMarketplaceSingleton) return stripeMarketplaceSingleton;
+  stripeMarketplaceSingleton = new StripeMarketplaceService();
+  return stripeMarketplaceSingleton;
+}

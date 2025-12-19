@@ -96,13 +96,23 @@ export const SUBSCRIPTION_PLANS: Record<string, SubscriptionPlan> = {
 };
 
 export class SubscriptionService {
-  private stripe: Stripe;
+  private stripe: Stripe | null = null;
 
   constructor() {
+    // Allow server startup without Stripe configured.
+    // Stripe-dependent methods will throw a clear error when invoked.
+    if (process.env.STRIPE_SECRET_KEY) {
+      this.stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+    }
+  }
+
+  private getStripe(): Stripe {
+    if (this.stripe) return this.stripe;
     if (!process.env.STRIPE_SECRET_KEY) {
       throw new Error('STRIPE_SECRET_KEY is not configured');
     }
     this.stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+    return this.stripe;
   }
 
   // Get or create Stripe customer for user
@@ -118,7 +128,7 @@ export class SubscriptionService {
     }
 
     // Create new Stripe customer
-    const customer = await this.stripe.customers.create({
+    const customer = await this.getStripe().customers.create({
       email: user.email || undefined,
       name: user.firstName && user.lastName 
         ? `${user.firstName} ${user.lastName}` 
@@ -148,7 +158,7 @@ export class SubscriptionService {
     const customerId = await this.getOrCreateCustomer(userId);
 
     // Create subscription
-    const subscription = await this.stripe.subscriptions.create({
+    const subscription = await this.getStripe().subscriptions.create({
       customer: customerId,
       items: [{ price: plan.stripePriceId }],
       payment_behavior: 'default_incomplete',
@@ -188,10 +198,10 @@ export class SubscriptionService {
     }
 
     // Retrieve current subscription
-    const subscription = await this.stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+    const subscription = await this.getStripe().subscriptions.retrieve(user.stripeSubscriptionId);
 
     // Update subscription with new price
-    const updatedSubscription = await this.stripe.subscriptions.update(
+    const updatedSubscription = await this.getStripe().subscriptions.update(
       user.stripeSubscriptionId,
       {
         items: [
@@ -224,10 +234,10 @@ export class SubscriptionService {
 
     if (immediately) {
       // Cancel immediately
-      subscription = await this.stripe.subscriptions.cancel(user.stripeSubscriptionId);
+      subscription = await this.getStripe().subscriptions.cancel(user.stripeSubscriptionId);
     } else {
       // Cancel at period end
-      subscription = await this.stripe.subscriptions.update(user.stripeSubscriptionId, {
+      subscription = await this.getStripe().subscriptions.update(user.stripeSubscriptionId, {
         cancel_at_period_end: true,
       });
     }
@@ -248,7 +258,7 @@ export class SubscriptionService {
       throw new Error('No subscription found');
     }
 
-    const subscription = await this.stripe.subscriptions.update(user.stripeSubscriptionId, {
+    const subscription = await this.getStripe().subscriptions.update(user.stripeSubscriptionId, {
       cancel_at_period_end: false,
     });
 
@@ -270,7 +280,7 @@ export class SubscriptionService {
     let subscription: Stripe.Subscription | null = null;
     if (user?.stripeSubscriptionId) {
       try {
-        subscription = await this.stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+        subscription = await this.getStripe().subscriptions.retrieve(user.stripeSubscriptionId);
       } catch (error) {
         console.error('Error fetching subscription:', error);
       }
@@ -300,7 +310,7 @@ export class SubscriptionService {
       throw new Error('No customer found');
     }
 
-    const session = await this.stripe.billingPortal.sessions.create({
+    const session = await this.getStripe().billingPortal.sessions.create({
       customer: user.stripeCustomerId,
       return_url: returnUrl,
     });
@@ -337,7 +347,7 @@ export class SubscriptionService {
     const customerId = subscription.customer as string;
     
     // Find user by customer ID
-    const customer = await this.stripe.customers.retrieve(customerId);
+    const customer = await this.getStripe().customers.retrieve(customerId);
     if (!customer || customer.deleted) return;
     
     const userId = (customer.metadata as any)?.userId;
@@ -361,7 +371,7 @@ export class SubscriptionService {
 
   private async handleSubscriptionDeleted(subscription: Stripe.Subscription): Promise<void> {
     const customerId = subscription.customer as string;
-    const customer = await this.stripe.customers.retrieve(customerId);
+    const customer = await this.getStripe().customers.retrieve(customerId);
     if (!customer || customer.deleted) return;
     
     const userId = (customer.metadata as any)?.userId;
@@ -375,7 +385,7 @@ export class SubscriptionService {
 
   private async handleInvoicePaid(invoice: Stripe.Invoice): Promise<void> {
     const customerId = invoice.customer as string;
-    const customer = await this.stripe.customers.retrieve(customerId);
+    const customer = await this.getStripe().customers.retrieve(customerId);
     if (!customer || customer.deleted) return;
     
     const userId = (customer.metadata as any)?.userId;
@@ -397,7 +407,7 @@ export class SubscriptionService {
 
   private async handlePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
     const customerId = invoice.customer as string;
-    const customer = await this.stripe.customers.retrieve(customerId);
+    const customer = await this.getStripe().customers.retrieve(customerId);
     if (!customer || customer.deleted) return;
     
     const userId = (customer.metadata as any)?.userId;

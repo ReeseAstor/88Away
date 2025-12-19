@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import Stripe from "stripe";
 import { storage } from "./storage";
@@ -23,7 +23,7 @@ import {
   type NarrativeFlowRequest
 } from "./openai";
 import { kdpService } from "./kdp-integration";
-import { stripeMarketplace } from "./stripe-marketplace";
+import { getStripeMarketplace } from "./stripe-marketplace";
 import { subscriptionService } from "./subscription-service";
 import { checkUsageLimit, requireFeature, checkExportFormat } from "./subscription-middleware";
 import multer from 'multer';
@@ -685,7 +685,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { businessType } = req.body;
-      const result = await stripeMarketplace.createConnectedAccount(user.email, businessType);
+      const result = await getStripeMarketplace().createConnectedAccount(user.email, businessType);
       
       // Store account ID in user record
       await storage.updateUser(userId, { stripeAccountId: result.accountId });
@@ -702,7 +702,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const productData = req.body;
       
-      const product = await stripeMarketplace.createProduct({
+      const product = await getStripeMarketplace().createProduct({
         ...productData,
         metadata: {
           ...productData.metadata,
@@ -720,7 +720,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/marketplace/prices', isAuthenticated, async (req: any, res) => {
     try {
       const priceData = req.body;
-      const price = await stripeMarketplace.createPrice(priceData);
+      const price = await getStripeMarketplace().createPrice(priceData);
       res.json(price);
     } catch (error) {
       console.error('Error creating price:', error);
@@ -740,9 +740,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metadata,
       } = req.body;
       
-      const feeStructure = await stripeMarketplace.getMarketplaceFeeStructure();
+      const feeStructure = await getStripeMarketplace().getMarketplaceFeeStructure();
       
-      const session = await stripeMarketplace.createCheckoutSession({
+      const session = await getStripeMarketplace().createCheckoutSession({
         priceId,
         buyerId: userId,
         sellerId,
@@ -765,7 +765,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const signature = req.headers['stripe-signature'];
       const payload = req.body;
       
-      await stripeMarketplace.handleWebhook(payload, signature);
+      await getStripeMarketplace().handleWebhook(payload, signature);
       res.json({ received: true });
     } catch (error) {
       console.error('Error handling webhook:', error);
@@ -812,7 +812,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: 'Access denied' });
       }
       
-      const analytics = await stripeMarketplace.getSellerAnalytics(
+      const analytics = await getStripeMarketplace().getSellerAnalytics(
         sellerId,
         period as 'week' | 'month' | 'year'
       );
@@ -827,7 +827,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/marketplace/refund', isAuthenticated, async (req: any, res) => {
     try {
       const { paymentIntentId, amount } = req.body;
-      const refund = await stripeMarketplace.createRefund(paymentIntentId, amount);
+      const refund = await getStripeMarketplace().createRefund(paymentIntentId, amount);
       res.json(refund);
     } catch (error) {
       console.error('Error creating refund:', error);
@@ -838,7 +838,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/marketplace/fees/calculate', isAuthenticated, async (req: any, res) => {
     try {
       const { amount } = req.query;
-      const fees = await stripeMarketplace.calculateFees(parseInt(amount as string));
+      const fees = await getStripeMarketplace().calculateFees(parseInt(amount as string));
       res.json(fees);
     } catch (error) {
       console.error('Error calculating fees:', error);
@@ -848,7 +848,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/marketplace/fees/structure', isAuthenticated, async (req: any, res) => {
     try {
-      const feeStructure = await stripeMarketplace.getMarketplaceFeeStructure();
+      const feeStructure = await getStripeMarketplace().getMarketplaceFeeStructure();
       res.json(feeStructure);
     } catch (error) {
       console.error('Error getting fee structure:', error);
