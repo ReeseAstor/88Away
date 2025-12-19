@@ -28,7 +28,8 @@ import {
   Star,
   BookOpen,
   Tag,
-  Globe
+  Globe,
+  Rocket
 } from 'lucide-react';
 import {
   LineChart,
@@ -109,6 +110,49 @@ interface ProjectAnalytics {
     totalWritingTime: number;
     mostProductiveHour: number;
     consistencyScore: number;
+  };
+  publishingPromotion?: {
+    readiness: {
+      score: number;
+      missing: string[];
+      nextSteps: string[];
+      breakdown: Array<{ name: string; score: number; max: number }>;
+    };
+    kdp: {
+      hasMetadata: boolean;
+      asin?: string | null;
+      kdpStatus?: string | null;
+      lastSynced?: string | null;
+      publicationDate?: string | null;
+      priceCents?: number | null;
+      royaltyRate?: number | null;
+      keywordCount: number;
+      categoryCount: number;
+    };
+    promotion: {
+      byChannel: Array<{
+        channel: string;
+        revenueCents: number;
+        spendCents: number;
+        netCents: number;
+        roas: number | null;
+        transactions: number;
+      }>;
+      byCampaign: Array<{
+        campaign: string;
+        revenueCents: number;
+        spendCents: number;
+        netCents: number;
+        roas: number | null;
+        transactions: number;
+      }>;
+      timeline: Array<{
+        date: string;
+        revenueCents: number;
+        spendCents: number;
+        netCents: number;
+      }>;
+    };
   };
   romance?: {
     genreBreakdown: Array<{ genre: string; books: number; words: number; revenue: number }>;
@@ -213,6 +257,8 @@ export default function AnalyticsPage() {
   }
 
   const isPremium = user?.subscriptionPlan === 'professional' || user?.subscriptionPlan === 'enterprise';
+  const formatMoney = (cents?: number | null) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(((cents || 0) as number) / 100);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
@@ -321,7 +367,7 @@ export default function AnalyticsPage() {
 
         {/* Main Analytics */}
         <Tabs defaultValue="progress" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5 bg-white/50 dark:bg-slate-800/50 backdrop-blur">
+          <TabsList className="grid w-full grid-cols-6 bg-white/50 dark:bg-slate-800/50 backdrop-blur">
             <TabsTrigger value="progress" className="flex items-center gap-2" data-testid="tab-progress">
               <TrendingUp className="h-4 w-4" />
               Progress
@@ -329,6 +375,10 @@ export default function AnalyticsPage() {
             <TabsTrigger value="romance" className="flex items-center gap-2" data-testid="tab-romance">
               <Heart className="h-4 w-4" />
               Romance
+            </TabsTrigger>
+            <TabsTrigger value="publishing" className="flex items-center gap-2" data-testid="tab-publishing">
+              <BookOpen className="h-4 w-4" />
+              Publishing
             </TabsTrigger>
             <TabsTrigger value="ai" className="flex items-center gap-2" data-testid="tab-ai">
               <Brain className="h-4 w-4" />
@@ -710,6 +760,196 @@ export default function AnalyticsPage() {
                     </h3>
                     <p className="text-slate-600 dark:text-slate-400">
                       Start writing romance content to see detailed genre analytics, trope usage, and market insights.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          <TabsContent value="publishing" className="space-y-6">
+            {analytics.publishingPromotion ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur border-amber-200 dark:border-amber-800">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                        Publishing Readiness
+                      </CardTitle>
+                      <Target className="h-4 w-4 text-amber-600" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-3xl font-bold text-slate-900 dark:text-slate-100">
+                        {analytics.publishingPromotion.readiness.score}%
+                      </div>
+                      <Progress value={analytics.publishingPromotion.readiness.score} className="mt-2" />
+                      <p className="text-xs text-slate-600 dark:text-slate-400 mt-2">
+                        Based on cover/blurb/KDP metadata + manuscript progress
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur border-blue-200 dark:border-blue-800">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                        KDP Metadata
+                      </CardTitle>
+                      <Tag className="h-4 w-4 text-blue-600" />
+                    </CardHeader>
+                    <CardContent className="space-y-1">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-600 dark:text-slate-400">Keywords</span>
+                        <span className="font-medium">{analytics.publishingPromotion.kdp.keywordCount}/7</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-600 dark:text-slate-400">Categories</span>
+                        <span className="font-medium">{analytics.publishingPromotion.kdp.categoryCount}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-600 dark:text-slate-400">Price</span>
+                        <span className="font-medium">{formatMoney(analytics.publishingPromotion.kdp.priceCents)}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-600 dark:text-slate-400">Status</span>
+                        <Badge variant="outline" className="text-xs">
+                          {analytics.publishingPromotion.kdp.kdpStatus || 'not connected'}
+                        </Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur border-green-200 dark:border-green-800">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                        Promo Net (Tracked)
+                      </CardTitle>
+                      <Globe className="h-4 w-4 text-green-600" />
+                    </CardHeader>
+                    <CardContent>
+                      {(() => {
+                        const totals = analytics.publishingPromotion.promotion.timeline.reduce(
+                          (acc, row) => ({
+                            revenueCents: acc.revenueCents + (row.revenueCents || 0),
+                            spendCents: acc.spendCents + (row.spendCents || 0),
+                            netCents: acc.netCents + (row.netCents || 0),
+                          }),
+                          { revenueCents: 0, spendCents: 0, netCents: 0 }
+                        );
+                        return (
+                          <>
+                            <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                              {formatMoney(totals.netCents)}
+                            </div>
+                            <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                              Revenue {formatMoney(totals.revenueCents)} · Spend {formatMoney(totals.spendCents)}
+                            </p>
+                          </>
+                        );
+                      })()}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <TrendingUp className="h-5 w-5 text-green-600" />
+                        Promotion Timeline (Revenue vs Spend)
+                      </CardTitle>
+                      <CardDescription>
+                        Track ad spend as negative revenue entries with campaign/channel metadata for ROAS.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={280}>
+                        <AreaChart data={analytics.publishingPromotion.promotion.timeline}>
+                          <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                          <XAxis dataKey="date" className="text-xs" tick={{ fontSize: 12 }} />
+                          <YAxis className="text-xs" tick={{ fontSize: 12 }} />
+                          <Tooltip
+                            formatter={(value: number, name: string) => [
+                              formatMoney(value),
+                              name.replace('Cents', '').replace(/([A-Z])/g, ' $1').trim(),
+                            ]}
+                            contentStyle={{
+                              backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                              border: '1px solid #e2e8f0',
+                              borderRadius: '8px',
+                            }}
+                          />
+                          <Area type="monotone" dataKey="revenueCents" stroke="#10b981" fill="#10b981" fillOpacity={0.25} />
+                          <Area type="monotone" dataKey="spendCents" stroke="#ef4444" fill="#ef4444" fillOpacity={0.18} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <BarChart3 className="h-5 w-5 text-blue-600" />
+                        ROAS by Channel
+                      </CardTitle>
+                      <CardDescription>Based on tracked revenue/spend entries.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {analytics.publishingPromotion.promotion.byChannel.length > 0 ? (
+                        analytics.publishingPromotion.promotion.byChannel.slice(0, 8).map((row) => (
+                          <div key={row.channel} className="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+                            <div className="flex items-center justify-between">
+                              <div className="font-medium text-slate-900 dark:text-slate-100">{row.channel}</div>
+                              <Badge variant="secondary" className="text-xs">
+                                ROAS {row.roas === null ? '—' : row.roas.toFixed(2)}
+                              </Badge>
+                            </div>
+                            <div className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                              Revenue {formatMoney(row.revenueCents)} · Spend {formatMoney(row.spendCents)} · Net{' '}
+                              {formatMoney(row.netCents)}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-sm text-slate-600 dark:text-slate-400">
+                          No promotion tracking yet. Add spend as negative revenue entries (e.g. source: amazon_ads, metadata: {'{'}channel, campaign{'}'}).
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {analytics.publishingPromotion.readiness.nextSteps.length > 0 && (
+                  <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Rocket className="h-5 w-5 text-purple-600" />
+                        Recommended Next Steps
+                      </CardTitle>
+                      <CardDescription>Highest-impact tasks to improve readiness and promo ROI.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ul className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
+                        {analytics.publishingPromotion.readiness.nextSteps.map((step, idx) => (
+                          <li key={idx} className="flex items-start gap-2">
+                            <div className="mt-1 h-2 w-2 rounded-full bg-purple-500" />
+                            <span>{step}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
+            ) : (
+              <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur">
+                <CardContent className="flex items-center justify-center py-12">
+                  <div className="text-center">
+                    <BookOpen className="h-12 w-12 mx-auto mb-4 text-slate-400" />
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">
+                      Publishing & Promotion Analytics Coming Soon
+                    </h3>
+                    <p className="text-slate-600 dark:text-slate-400">
+                      Add KDP metadata, a cover/blurb, and revenue/spend entries to unlock promotion ROI and readiness scoring.
                     </p>
                   </div>
                 </CardContent>

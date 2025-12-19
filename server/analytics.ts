@@ -10,9 +10,14 @@ import {
   writingSessions,
   activityLogs,
   projectCollaborators,
-  users
+  users,
+  coverDesigns,
+  bookBlurbs,
+  kdpMetadata,
+  revenueEntries,
 } from '@shared/schema';
 import { sql, and, eq, gte, desc, count, sum, avg } from 'drizzle-orm';
+import { computePromotionAttribution, computePublishingReadiness } from './publishingPromotionAnalytics';
 
 export interface ProjectAnalytics {
   overview: {
@@ -74,6 +79,49 @@ export interface ProjectAnalytics {
     mostProductiveHour: number;
     consistencyScore: number;
   };
+  publishingPromotion?: {
+    readiness: {
+      score: number;
+      missing: string[];
+      nextSteps: string[];
+      breakdown: Array<{ name: string; score: number; max: number }>;
+    };
+    kdp: {
+      hasMetadata: boolean;
+      asin?: string | null;
+      kdpStatus?: string | null;
+      lastSynced?: string | null;
+      publicationDate?: string | null;
+      priceCents?: number | null;
+      royaltyRate?: number | null;
+      keywordCount: number;
+      categoryCount: number;
+    };
+    promotion: {
+      byChannel: Array<{
+        channel: string;
+        revenueCents: number;
+        spendCents: number;
+        netCents: number;
+        roas: number | null;
+        transactions: number;
+      }>;
+      byCampaign: Array<{
+        campaign: string;
+        revenueCents: number;
+        spendCents: number;
+        netCents: number;
+        roas: number | null;
+        transactions: number;
+      }>;
+      timeline: Array<{
+        date: string;
+        revenueCents: number;
+        spendCents: number;
+        netCents: number;
+      }>;
+    };
+  };
 }
 
 export class AnalyticsService {
@@ -95,12 +143,13 @@ export class AnalyticsService {
       throw new Error('Access denied - not authorized for this project');
     }
 
-    const [overview, writingProgress, aiUsage, collaboration, productivity] = await Promise.all([
+    const [overview, writingProgress, aiUsage, collaboration, productivity, publishingPromotion] = await Promise.all([
       this.getOverviewMetrics(projectId),
       this.getWritingProgressMetrics(projectId),
       this.getAiUsageMetrics(projectId),
       this.getCollaborationMetrics(projectId),
       this.getProductivityMetrics(projectId),
+      this.getPublishingPromotionMetrics(projectId),
     ]);
 
     return {
@@ -109,6 +158,7 @@ export class AnalyticsService {
       aiUsage,
       collaboration,
       productivity,
+      publishingPromotion,
     };
   }
 
@@ -537,6 +587,138 @@ export class AnalyticsService {
       totalWritingTime: Number(totalTime[0]?.total) || 0,
       mostProductiveHour,
       consistencyScore,
+    };
+  }
+
+  private static async getPublishingPromotionMetrics(projectId: string) {
+    const [projectRow, kdpRow, coverRow, blurbRow, revenueRows] = await Promise.all([
+      db
+        .select({
+          currentWordCount: projects.currentWordCount,
+          targetWordCount: projects.targetWordCount,
+          publicationStatus: projects.publicationStatus,
+        })
+        .from(projects)
+        .where(eq(projects.id, projectId))
+        .limit(1),
+      db
+        .select({
+          asin: kdpMetadata.asin,
+          categories: kdpMetadata.categories,
+          keywords: kdpMetadata.keywords,
+          price: kdpMetadata.price,
+          royaltyRate: kdpMetadata.royaltyRate,
+          publicationDate: kdpMetadata.publicationDate,
+          lastSynced: kdpMetadata.lastSynced,
+          kdpStatus: kdpMetadata.kdpStatus,
+          updatedAt: kdpMetadata.updatedAt,
+        })
+        .from(kdpMetadata)
+        .where(eq(kdpMetadata.projectId, projectId))
+        .orderBy(desc(kdpMetadata.updatedAt))
+        .limit(1),
+      db
+        .select({ id: coverDesigns.id })
+        .from(coverDesigns)
+        .where(and(eq(coverDesigns.projectId, projectId), eq(coverDesigns.isSelected, true)))
+        .limit(1),
+      db
+        .select({ id: bookBlurbs.id })
+        .from(bookBlurbs)
+        .where(and(eq(bookBlurbs.projectId, projectId), eq(bookBlurbs.isActive, true)))
+        .limit(1),
+      db
+        .select({
+          amount: revenueEntries.amount,
+          source: revenueEntries.source,
+          transactionDate: revenueEntries.transactionDate,
+          metadata: revenueEntries.metadata,
+        })
+        .from(revenueEntries)
+        .where(eq(revenueEntries.projectId, projectId)),
+    ]);
+
+    const project = projectRow[0];
+    const kdp = kdpRow[0];
+
+    const keywordCount = (kdp?.keywords?.length ?? 0) as number;
+    const categoryCount = (kdp?.categories?.length ?? 0) as number;
+
+    const readiness = computePublishingReadiness({
+      currentWordCount: project?.currentWordCount ?? null,
+      targetWordCount: project?.targetWordCount ?? null,
+      publicationStatus: (project?.publicationStatus as any) ?? null,
+      hasSelectedCover: coverRow.length > 0,
+      hasActiveBlurb: blurbRow.length > 0,
+      keywordCount,
+      categoryCount,
+      hasPrice: typeof kdp?.price === 'number',
+      hasPublicationDate: !!kdp?.publicationDate,
+    });
+
+    const promotion = computePromotionAttribution(
+      revenueRows.map((r) => ({
+        amount: Number(r.amount) || 0,
+        source: r.source,
+        transactionDate: r.transactionDate ?? new Date(),
+        metadata: r.metadata,
+      }))
+    );
+
+    return {
+      readiness,
+      kdp: {
+        hasMetadata: !!kdp,
+        asin: kdp?.asin ?? null,
+        kdpStatus: kdp?.kdpStatus ?? null,
+        lastSynced: kdp?.lastSynced ? kdp.lastSynced.toISOString() : null,
+        publicationDate: kdp?.publicationDate ? kdp.publicationDate.toISOString() : null,
+        priceCents: typeof kdp?.price === 'number' ? kdp.price : null,
+        royaltyRate: typeof kdp?.royaltyRate === 'number' ? kdp.royaltyRate : null,
+        keywordCount,
+        categoryCount,
+      },
+      promotion: {
+        byChannel: promotion.byChannel.map((r) => ({
+          channel: r.key,
+          revenueCents: r.revenueCents,
+          spendCents: r.spendCents,
+          netCents: r.netCents,
+          roas: r.roas,
+          transactions: r.transactions,
+        })),
+        byCampaign: promotion.byCampaign.map((r) => ({
+          campaign: r.key,
+          revenueCents: r.revenueCents,
+          spendCents: r.spendCents,
+          netCents: r.netCents,
+          roas: r.roas,
+          transactions: r.transactions,
+        })),
+        timeline: promotion.timeline,
+      },
+    };
+  }
+
+  // Used by legacy romance routes; keep lightweight to avoid breaking builds.
+  static async getRomanceAnalytics(_projectId: string, _userId: string) {
+    return {
+      genreBreakdown: [],
+      tropeUsage: [],
+      heatLevelDistribution: [],
+      seriesMetrics: {
+        totalSeries: 0,
+        avgBooksPerSeries: 0,
+        completionRate: 0,
+      },
+      marketPerformance: {
+        bestsellers: 0,
+        avgRating: 0,
+        totalReviews: 0,
+        readerEngagement: 0,
+      },
+      characterDynamics: [],
+      seasonalTrends: [],
     };
   }
 
