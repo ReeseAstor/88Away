@@ -9,6 +9,8 @@ type StreamInfo = {
   lastEventAt: Date | null;
 };
 
+type EventHandler = (event: BaseEvent) => void | Promise<void>;
+
 /**
  * Lightweight in-memory event stream implementation used to satisfy
  * server-side real-time APIs within this repository. The goal is to
@@ -18,6 +20,7 @@ type StreamInfo = {
 export class EventStreamService {
   private static instance: EventStreamService;
   private events: Map<string, StoredEvent[]> = new Map();
+  private subscribers: Map<string, Set<EventHandler>> = new Map();
 
   private constructor() {}
 
@@ -51,6 +54,16 @@ export class EventStreamService {
       bucket.splice(0, bucket.length - 10_000);
     }
 
+    // Fan out to subscribers for this category (best-effort; don't block publishing)
+    const subs = this.subscribers.get(key);
+    if (subs && subs.size > 0) {
+      await Promise.allSettled(
+        Array.from(subs).map(async (handler) => {
+          await handler(storeEvent);
+        })
+      );
+    }
+
     return storeEvent.id;
   }
 
@@ -76,7 +89,7 @@ export class EventStreamService {
 
     return bucket
       .filter((event) => {
-        const ts = event.timestamp;
+        const ts = event.timestamp ?? event.created_at;
         return ts >= startTime && ts <= endTime;
       })
       .slice(-limit);
@@ -93,8 +106,28 @@ export class EventStreamService {
     return {
       category,
       totalEvents: bucket.length,
-      firstEventAt: first ? first.timestamp : null,
-      lastEventAt: last ? last.timestamp : null,
+      firstEventAt: first ? (first.timestamp ?? first.created_at) : null,
+      lastEventAt: last ? (last.timestamp ?? last.created_at) : null,
+    };
+  }
+
+  /**
+   * Subscribe to a category stream.
+   * Returns an unsubscribe function.
+   */
+  public async subscribe(category: string, handler: EventHandler): Promise<() => void> {
+    if (!this.subscribers.has(category)) {
+      this.subscribers.set(category, new Set());
+    }
+    this.subscribers.get(category)!.add(handler);
+
+    return () => {
+      const set = this.subscribers.get(category);
+      if (!set) return;
+      set.delete(handler);
+      if (set.size === 0) {
+        this.subscribers.delete(category);
+      }
     };
   }
 
@@ -103,5 +136,6 @@ export class EventStreamService {
    */
   public async destroy(): Promise<void> {
     this.events.clear();
+    this.subscribers.clear();
   }
 }
