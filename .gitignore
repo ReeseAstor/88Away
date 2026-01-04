@@ -17,3 +17,6 @@ vite.config.ts.*
 # Environment
 .env.local
 .env.*.local
+
+# Cursor MCP (keep real tokens out of git)
+.cursor/mcp.json
