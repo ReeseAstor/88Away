@@ -18,5 +18,5 @@ vite.config.ts.*
 .env.local
 .env.*.local
 
-# MCP Configuration (contains API tokens)
-.mcp.json
+# Cursor MCP (keep real tokens out of git)
+.cursor/mcp.json
