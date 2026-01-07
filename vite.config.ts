@@ -71,4 +71,13 @@ export default defineConfig({
       deny: ["**/.*"],
     },
   },
+  test: {
+    environment: "jsdom",
+    globals: true,
+    setupFiles: ["./tests/setup.ts"],
+    include: ["tests/**/*.test.{ts,tsx}"],
+    exclude: ["tests/e2e-*.test.ts"],
+    clearMocks: true,
+    restoreMocks: true,
+  },
 });
