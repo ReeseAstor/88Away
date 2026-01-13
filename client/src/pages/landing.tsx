@@ -8,34 +8,29 @@ import {
 } from "@/components/ui/card";
 import {
   ArrowRight,
-  BookOpen,
+  ArrowRightLeft,
+  BarChart3,
+  CalendarClock,
   Check,
+  CheckCircle2,
   ChevronRight,
   Crown,
-  Edit3,
-  Feather,
-  FileText,
+  DollarSign,
   Globe,
-  Heart,
-  Layers,
-  Lightbulb,
+  LineChart,
   Mail,
   MapPin,
-  Palette,
-  PenTool,
+  Quote,
+  RefreshCw,
   Shield,
+  ShieldCheck,
   Sparkles,
   Star,
   Target,
   TrendingUp,
   Users,
+  Wallet,
   Zap,
-  BookMarked,
-  Award,
-  BarChart3,
-  Quote,
-  Play,
-  CheckCircle2,
 } from "lucide-react";
 import logo from "@/assets/88away-logo-pink.png";
 import logoWhite from "@/assets/88away-logo-white.png";
@@ -115,169 +110,169 @@ export default function Landing() {
   const siteUrl = envBase.endsWith("/") ? envBase.slice(0, -1) : envBase;
   const shareImageUrl = `${siteUrl}${logo}`;
 
-  const wordsCounter = useCounter(2400000, 2500);
-  const authorsCounter = useCounter(15000, 2000);
-  const booksCounter = useCounter(8500, 2200);
+  const volumeCounter = useCounter(1800000000, 2500);
+  const currenciesCounter = useCounter(45, 2000);
+  const settlementCounter = useCounter(2, 1800);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      wordsCounter.start();
-      authorsCounter.start();
-      booksCounter.start();
+      volumeCounter.start();
+      currenciesCounter.start();
+      settlementCounter.start();
     }, 800);
     return () => clearTimeout(timer);
   }, []);
 
   const impactStats = [
     {
-      value: wordsCounter.count.toLocaleString() + "+",
-      label: "Words Written Monthly",
-      sublabel: "Across all projects",
-      icon: <PenTool className="h-5 w-5" />
+      value: `$${volumeCounter.count.toLocaleString()}+`,
+      label: "Converted Volume",
+      sublabel: "Processed annually",
+      icon: <DollarSign className="h-5 w-5" />
     },
     {
-      value: authorsCounter.count.toLocaleString() + "+",
-      label: "Professional Authors",
-      sublabel: "Trust our platform",
-      icon: <Users className="h-5 w-5" />
+      value: `${currenciesCounter.count}+`,
+      label: "Supported Currencies",
+      sublabel: "Across global corridors",
+      icon: <Globe className="h-5 w-5" />
     },
     {
-      value: booksCounter.count.toLocaleString() + "+",
-      label: "Books Published",
-      sublabel: "Using 88Away",
-      icon: <BookMarked className="h-5 w-5" />
+      value: `${settlementCounter.count} min`,
+      label: "Average Settlement",
+      sublabel: "From lock to payout",
+      icon: <Zap className="h-5 w-5" />
     },
   ];
 
   const trustedBy = [
-    { name: "Northwind Press", books: "200+ titles" },
-    { name: "Lumen Studios", books: "Entertainment" },
-    { name: "Rose & Ember", books: "Romance Imprint" },
-    { name: "Midnight Writers", books: "Indie Collective" },
-    { name: "Sterling House", books: "Literary Fiction" },
+    { name: "Harbor Capital", detail: "Treasury team" },
+    { name: "Latitude Freight", detail: "Logistics payments" },
+    { name: "Summit Retail", detail: "Global ecommerce" },
+    { name: "Atlas Partners", detail: "Investment ops" },
+    { name: "Nova Health", detail: "Multi-currency payroll" },
   ];
 
   const platformFeatures = [
     {
-      icon: <BookOpen className="h-7 w-7" />,
-      title: "Story Bible System",
-      description: "Organize characters, worlds, timelines, and plot arcs in a unified creative database. Never lose track of your story's DNA.",
+      icon: <ArrowRightLeft className="h-7 w-7" />,
+      title: "Real-time Cash Conversion",
+      description: "Lock live FX rates instantly and convert balances across 45+ currencies without hidden spreads or delays.",
       gradient: "from-romance-burgundy-500 to-romance-burgundy-600",
-      stats: "6 narrative views",
+      stats: "Sub-second pricing",
     },
     {
-      icon: <Sparkles className="h-7 w-7" />,
-      title: "AI Writing Companions",
-      description: "Three specialized AI personas - Muse for creativity, Editor for polish, Coach for planning - each trained for storytelling excellence.",
+      icon: <Wallet className="h-7 w-7" />,
+      title: "Multi-currency Wallets",
+      description: "Hold, sweep, and route cash where you need it. Automate conversions based on thresholds and funding schedules.",
       gradient: "from-tender-500 to-tender-600",
-      stats: "30K word context",
+      stats: "Unified treasury",
     },
     {
-      icon: <Users className="h-7 w-7" />,
-      title: "Team Collaboration",
-      description: "Real-time co-writing with granular permissions. Branch narratives, merge contributions, and maintain version control across your team.",
+      icon: <ShieldCheck className="h-7 w-7" />,
+      title: "Compliance & Controls",
+      description: "Enterprise-grade KYC, SOC 2 aligned controls, and configurable approval flows keep every conversion audit-ready.",
       gradient: "from-romance-rose-gold-500 to-romance-rose-gold-600",
-      stats: "Live presence",
+      stats: "SOC 2 aligned",
     },
     {
-      icon: <TrendingUp className="h-7 w-7" />,
-      title: "Publishing Pipeline",
-      description: "Export to ePub, PDF, KDP-ready packages. Sync metadata to marketplaces. Track royalties and reader analytics in one dashboard.",
+      icon: <BarChart3 className="h-7 w-7" />,
+      title: "Savings Analytics",
+      description: "Track avoided fees, rate improvements, and forecasted exposure. Share insights with finance in one dashboard.",
       gradient: "from-romance-champagne-500 to-romance-champagne-600",
-      stats: "One-click publish",
+      stats: "Real-time insights",
     },
   ];
 
-  const aiPersonas = [
+  const conversionModes = [
     {
-      name: "Muse",
-      role: "Creative Inspiration",
-      description: "Generate evocative scenes with rich sensory details. Develop unique character voices. Enhance emotional depth and narrative tension.",
-      capabilities: ["Sensory-rich scene generation", "Character voice development", "Emotional arc enhancement", "Trope-aware suggestions"],
+      name: "Spot",
+      role: "Instant liquidity",
+      description: "Convert immediately at live mid-market rates with transparent fees and instant confirmation.",
+      capabilities: ["Live rate lock", "Instant confirmation", "Same-day payouts", "Automated receipts"],
       color: "from-tender-400 to-tender-600",
       bgColor: "bg-tender-50",
       borderColor: "border-tender-200",
-      icon: <Lightbulb className="h-8 w-8 text-tender-600" />,
+      icon: <RefreshCw className="h-8 w-8 text-tender-600" />,
     },
     {
-      name: "Editor",
-      role: "Polish & Refine",
-      description: "Improve clarity, grammar, and flow while preserving your unique voice. Get professional-grade manuscript polish instantly.",
-      capabilities: ["Grammar & style refinement", "Voice preservation", "Pacing optimization", "Consistency checking"],
+      name: "Scheduled",
+      role: "Planned conversions",
+      description: "Set future conversions with target rates and timing windows to protect margins and simplify forecasting.",
+      capabilities: ["Target rate alerts", "Time-based execution", "Approval workflows", "Auto-settlement"],
       color: "from-romance-burgundy-400 to-romance-burgundy-600",
       bgColor: "bg-romance-burgundy-50",
       borderColor: "border-romance-burgundy-200",
-      icon: <Edit3 className="h-8 w-8 text-romance-burgundy-600" />,
+      icon: <CalendarClock className="h-8 w-8 text-romance-burgundy-600" />,
     },
     {
-      name: "Coach",
-      role: "Structure & Strategy",
-      description: "Create outlines, story beats, and structural guidance. Plan series arcs, manage subplots, and hit your publishing deadlines.",
-      capabilities: ["Beat sheet creation", "Series arc planning", "Deadline management", "Plot hole detection"],
+      name: "Bulk",
+      role: "High-volume runs",
+      description: "Convert large batches across subsidiaries with consolidated reporting, approvals, and structured pricing.",
+      capabilities: ["Batch execution", "Subsidiary routing", "Volume pricing", "Audit-ready logs"],
       color: "from-romance-rose-gold-400 to-romance-rose-gold-600",
       bgColor: "bg-romance-rose-gold-50",
       borderColor: "border-romance-rose-gold-200",
-      icon: <Target className="h-8 w-8 text-romance-rose-gold-600" />,
+      icon: <TrendingUp className="h-8 w-8 text-romance-rose-gold-600" />,
     },
   ];
 
   const workflowSteps = [
     {
       step: "01",
-      title: "Capture Your Vision",
-      description: "Start with tropes, themes, and story seeds. Our adaptive templates help you crystallize your creative vision in minutes.",
-      icon: <Feather className="h-6 w-6" />,
+      title: "Connect Your Accounts",
+      description: "Link your treasury, payouts, or payment providers in minutes with secure, guided onboarding.",
+      icon: <Users className="h-6 w-6" />,
       color: "text-romance-burgundy-600",
-      time: "5 min setup"
+      time: "10 min setup"
     },
     {
       step: "02",
-      title: "Structure & Plan",
-      description: "AI companions help create beat sheets, POV maps, and production schedules. See your entire series architecture at a glance.",
-      icon: <Layers className="h-6 w-6" />,
+      title: "Lock the Best Rate",
+      description: "Compare corridors, lock mid-market pricing, and apply approval rules before you convert.",
+      icon: <Target className="h-6 w-6" />,
       color: "text-tender-600",
-      time: "15 min planning"
+      time: "Live pricing"
     },
     {
       step: "03",
-      title: "Write & Collaborate",
-      description: "Invite co-authors with role-based access. Use branching workflows, inline comments, and merge-ready diffs for seamless teamwork.",
-      icon: <Users className="h-6 w-6" />,
+      title: "Convert & Settle",
+      description: "Execute conversions with instant confirmation and automated settlement into destination accounts.",
+      icon: <ArrowRightLeft className="h-6 w-6" />,
       color: "text-romance-rose-gold-600",
-      time: "Real-time"
+      time: "Same-day"
     },
     {
       step: "04",
-      title: "Publish & Grow",
-      description: "Export to any format. Push to KDP, Draft2Digital, and more. Track performance with built-in royalty analytics.",
-      icon: <Globe className="h-6 w-6" />,
+      title: "Track Savings",
+      description: "Monitor cost savings, exposure, and cash flow trends in a single dashboard.",
+      icon: <LineChart className="h-6 w-6" />,
       color: "text-romance-champagne-600",
-      time: "One-click"
+      time: "Always-on"
     },
   ];
 
   const testimonials = [
     {
-      quote: "We've replaced six different tools with 88Away. The branching editor keeps creative chaos organized without losing spontaneity. My productivity has tripled.",
+      quote: "88Away cut our conversion costs by 32% in the first quarter. The rate locks are instant and the audit trail keeps finance confident.",
       name: "Ivy Calder",
-      role: "USA Today Bestselling Author",
-      metric: "8-book series",
+      role: "VP Finance, Harbor Capital",
+      metric: "32% savings",
       image: "IC",
       rating: 5,
     },
     {
-      quote: "Our writers' room finally has a single source of truth. Version diffing plus AI personas lets junior writers deliver senior-level drafts. Game changer.",
+      quote: "We convert across six markets daily. Scheduled conversions and approvals give us control without slowing down operations.",
       name: "Mika Ren",
-      role: "Head of Story, Lumen Studios",
-      metric: "12 person team",
+      role: "Treasury Lead, Latitude Freight",
+      metric: "6 markets",
       image: "MR",
       rating: 5,
     },
     {
-      quote: "From timeline planning to polished copy, 88Away covers the entire workflow. The Muse persona is now a non-negotiable creative partner for our imprint.",
+      quote: "The analytics dashboard made it easy to prove ROI. We can finally forecast exposure with confidence.",
       name: "Cassidy Vale",
-      role: "Editor-in-Chief, Northwind Press",
-      metric: "4 imprints managed",
+      role: "Director of Ops, Summit Retail",
+      metric: "Global payout",
       image: "CV",
       rating: 5,
     },
@@ -286,50 +281,49 @@ export default function Landing() {
   const plans = [
     {
       name: "Starter",
-      price: "$9",
+      price: "$0",
       period: "/month",
-      description: "Perfect for indie authors beginning their journey",
+      description: "For small teams testing conversions",
       features: [
-        "1 Active Project",
-        "Basic AI Assistance (10 sessions/month)",
-        "Character & World Database",
-        "Export to JSON & Markdown",
-        "Email Support",
+        "Up to $50K monthly conversion",
+        "Live FX rates",
+        "2 approval seats",
+        "Standard settlement",
+        "Email support",
       ],
-      cta: "Start Free Trial",
+      cta: "Start Free",
       highlight: false,
     },
     {
-      name: "Professional",
-      price: "$29",
+      name: "Growth",
+      price: "$199",
       period: "/month",
-      description: "For serious authors and small teams",
+      description: "For scaling global operations",
       features: [
-        "5 Active Projects",
-        "Advanced AI Assistance (100 sessions/month)",
-        "Team Collaboration (up to 5 members)",
-        "Advanced Export (PDF, ePub, DOCX)",
-        "Priority Support",
-        "Version History & Branching",
-        "Series Management Tools",
+        "Up to $2M monthly conversion",
+        "Scheduled conversions",
+        "Unlimited approval flows",
+        "Priority settlement",
+        "Savings analytics",
+        "Slack + email support",
+        "Multi-entity reporting",
       ],
-      cta: "Get Started",
+      cta: "Request Access",
       highlight: true,
     },
     {
       name: "Enterprise",
-      price: "$99",
+      price: "Custom",
       period: "/month",
-      description: "For publishing houses and production studios",
+      description: "For high-volume, regulated businesses",
       features: [
-        "Unlimited Projects",
-        "Unlimited AI Sessions",
-        "Unlimited Team Members",
-        "Custom Export Templates",
-        "Dedicated Account Manager",
-        "Advanced Analytics & Reporting",
-        "API Access & Integrations",
-        "SSO & Advanced Security",
+        "Unlimited volume + corridors",
+        "Dedicated FX desk",
+        "Custom settlement SLAs",
+        "API + ERP integrations",
+        "Dedicated account manager",
+        "Compliance support",
+        "SSO & advanced security",
       ],
       cta: "Contact Sales",
       highlight: false,
@@ -337,28 +331,28 @@ export default function Landing() {
   ];
 
   const comparisonFeatures = [
-    { feature: "AI Writing Assistance", us: true, others: "Limited" },
-    { feature: "Story Bible Database", us: true, others: false },
-    { feature: "Real-time Collaboration", us: true, others: "Basic" },
-    { feature: "Version Control & Branching", us: true, others: false },
-    { feature: "Series Management", us: true, others: false },
-    { feature: "One-click Publishing", us: true, others: "Manual" },
-    { feature: "Royalty Analytics", us: true, others: false },
+    { feature: "Real-time mid-market rates", us: true, others: "Markup" },
+    { feature: "Multi-entity approvals", us: true, others: "Manual" },
+    { feature: "Automated settlement", us: true, others: "Limited" },
+    { feature: "Compliance-ready audit logs", us: true, others: false },
+    { feature: "Exposure forecasting", us: true, others: false },
+    { feature: "Savings analytics", us: true, others: "Basic" },
+    { feature: "Dedicated FX support", us: "Growth+", others: false },
   ];
 
   return (
     <>
       <Seo
-        title="88Away - The Premier Platform for Professional Authors"
-        description="Plan, write, and publish your stories with AI-powered assistance, comprehensive worldbuilding databases, and collaborative workflows designed for professional authors and publishing teams."
+        title="88Away - Cash Conversion for Global Teams"
+        description="Convert cash across 45+ currencies with real-time rates, automated approvals, and instant settlement. Built for finance teams that need speed, control, and savings."
         keywords={[
-          "AI writing software",
-          "story bible management",
-          "author collaboration platform",
-          "novel planning tools",
-          "creative writing AI",
-          "publishing platform",
-          "book writing software",
+          "cash conversion",
+          "foreign exchange",
+          "fx rates",
+          "treasury platform",
+          "multi-currency wallet",
+          "international payments",
+          "currency exchange",
         ]}
         structuredData={[
           {
@@ -388,29 +382,29 @@ export default function Landing() {
             "@context": "https://schema.org",
             "@type": "SoftwareApplication",
             name: "88Away",
-            applicationCategory: "ProductivityApplication",
+            applicationCategory: "FinanceApplication",
             operatingSystem: "Web",
             offers: {
               "@type": "Offer",
-              price: "9.00",
+              price: "0.00",
               priceCurrency: "USD",
               priceSpecification: [
                 {
                   "@type": "UnitPriceSpecification",
-                  price: "9.00",
+                  price: "0.00",
                   priceCurrency: "USD",
                   description: "Starter monthly plan",
                 },
                 {
                   "@type": "UnitPriceSpecification",
-                  price: "29.00",
+                  price: "199.00",
                   priceCurrency: "USD",
-                  description: "Professional monthly plan",
+                  description: "Growth monthly plan",
                 },
               ],
             },
             description:
-              "88Away is a professional writing platform that combines AI-assisted drafting, story bible management, and real-time collaboration for storytelling teams.",
+              "88Away is a cash conversion platform that combines real-time FX pricing, automated approvals, and analytics for global finance teams.",
             url: siteUrl,
             image: shareImageUrl,
           },
@@ -443,27 +437,27 @@ export default function Landing() {
             animate="animate"
           />
 
-          {/* Decorative book/pen elements */}
+          {/* Decorative finance elements */}
           <motion.div
             className="absolute top-32 right-[20%] opacity-10"
             variants={floatDelayed}
             animate="animate"
           >
-            <BookOpen className="h-24 w-24 text-romance-burgundy-600" strokeWidth={1} />
+            <DollarSign className="h-24 w-24 text-romance-burgundy-600" strokeWidth={1} />
           </motion.div>
           <motion.div
             className="absolute bottom-48 left-[12%] opacity-10"
             variants={float}
             animate="animate"
           >
-            <Feather className="h-20 w-20 text-tender-600" strokeWidth={1} />
+            <TrendingUp className="h-20 w-20 text-tender-600" strokeWidth={1} />
           </motion.div>
           <motion.div
             className="absolute top-1/2 left-[5%] opacity-10"
             variants={floatSlow}
             animate="animate"
           >
-            <Heart className="h-16 w-16 text-romance-blush-500" strokeWidth={1} />
+            <ShieldCheck className="h-16 w-16 text-romance-blush-500" strokeWidth={1} />
           </motion.div>
 
           {/* Main hero content */}
@@ -480,7 +474,7 @@ export default function Landing() {
                 className="inline-flex items-center gap-2 rounded-full border border-romance-burgundy-200/60 bg-white/60 backdrop-blur-sm px-5 py-2.5 text-sm font-medium text-romance-burgundy-700 shadow-lg shadow-romance-burgundy-500/10"
               >
                 <Crown className="h-4 w-4 text-romance-champagne-500" />
-                <span>The Premier Platform for Professional Authors</span>
+                <span>Cash Conversion Built for Modern Finance Teams</span>
                 <Sparkles className="h-4 w-4 text-romance-burgundy-400" />
               </motion.div>
 
@@ -498,10 +492,10 @@ export default function Landing() {
                 variants={fadeInUp}
                 className="font-serif text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-semibold tracking-tight text-foreground max-w-5xl leading-[1.1]"
               >
-                Where Stories{" "}
+                Convert Cash{" "}
                 <span className="relative inline-block">
                   <span className="relative z-10 bg-gradient-to-r from-romance-burgundy-600 via-tender-500 to-romance-rose-gold-500 bg-clip-text text-transparent">
-                    Come to Life
+                    Faster & Smarter
                   </span>
                   <span className="absolute bottom-2 left-0 right-0 h-3 bg-gradient-to-r from-romance-champagne-200 to-romance-blush-200 -z-10 transform -rotate-1" />
                 </span>
@@ -512,9 +506,9 @@ export default function Landing() {
                 variants={fadeInUp}
                 className="text-lg sm:text-xl lg:text-2xl text-muted-foreground max-w-3xl leading-relaxed font-light"
               >
-                The all-in-one writing platform that unifies <span className="text-foreground font-medium">AI companions</span>,
-                <span className="text-foreground font-medium"> story bible management</span>, and
-                <span className="text-foreground font-medium"> collaborative workflows</span> for authors who ship bestsellers.
+                A cash conversion platform that unifies <span className="text-foreground font-medium">real-time FX pricing</span>,
+                <span className="text-foreground font-medium"> automated approvals</span>, and
+                <span className="text-foreground font-medium"> instant settlement</span> for global finance teams.
               </motion.p>
 
               {/* CTA buttons */}
@@ -529,7 +523,7 @@ export default function Landing() {
                   data-testid="button-get-started"
                 >
                   <Zap className="mr-2 h-5 w-5 group-hover:animate-pulse" />
-                  Start Writing Free
+                  Start Converting
                   <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
                 </Button>
                 <Button
@@ -538,9 +532,9 @@ export default function Landing() {
                   className="group text-lg px-10 py-7 border-2 border-romance-burgundy-200 hover:border-romance-burgundy-400 bg-white/50 backdrop-blur-sm hover:bg-white/80 transition-all duration-300"
                   data-testid="button-watch-demo"
                 >
-                  <Play className="mr-2 h-5 w-5 text-romance-burgundy-600" />
-                  Watch Demo
-                  <span className="ml-2 text-sm text-muted-foreground">(2 min)</span>
+                  <BarChart3 className="mr-2 h-5 w-5 text-romance-burgundy-600" />
+                  See Live Rates
+                  <span className="ml-2 text-sm text-muted-foreground">(updated in real time)</span>
                 </Button>
               </motion.div>
 
@@ -554,11 +548,11 @@ export default function Landing() {
                     <Star key={i} className="h-5 w-5 fill-romance-champagne-400 text-romance-champagne-400" />
                   ))}
                   <span className="ml-2 text-sm text-muted-foreground">
-                    4.9/5 from 2,400+ authors
+                    4.9/5 from 2,400+ finance teams
                   </span>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  No credit card required · 14-day free trial · Cancel anytime
+                  No credit card required · Free starter plan · Cancel anytime
                 </p>
               </motion.div>
             </motion.div>
@@ -618,7 +612,7 @@ export default function Landing() {
               variants={fadeIn}
             >
               <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground mb-10">
-                Trusted by leading publishers and storytelling teams
+                Trusted by finance teams managing global cash flows
               </p>
               <div className="flex flex-wrap justify-center items-center gap-x-12 gap-y-6">
                 {trustedBy.map((company) => (
@@ -629,7 +623,7 @@ export default function Landing() {
                     <span className="text-xl font-semibold text-muted-foreground/70 group-hover:text-foreground transition-colors">
                       {company.name}
                     </span>
-                    <span className="text-xs text-muted-foreground/50 mt-1">{company.books}</span>
+                    <span className="text-xs text-muted-foreground/50 mt-1">{company.detail}</span>
                   </div>
                 ))}
               </div>
@@ -638,7 +632,7 @@ export default function Landing() {
         </section>
 
         {/* ========== PLATFORM FEATURES SECTION ========== */}
-        <section className="py-28 bg-background relative overflow-hidden">
+        <section id="features" className="py-28 bg-background relative overflow-hidden">
           {/* Background decoration */}
           <div className="absolute top-0 right-0 w-1/2 h-1/2 bg-gradient-to-bl from-romance-burgundy-50/50 to-transparent" />
           <div className="absolute bottom-0 left-0 w-1/2 h-1/2 bg-gradient-to-tr from-tender-50/50 to-transparent" />
@@ -654,7 +648,7 @@ export default function Landing() {
               <motion.div variants={fadeInUp}>
                 <span className="inline-flex items-center gap-2 rounded-full bg-romance-burgundy-100/80 px-5 py-2 text-sm font-semibold text-romance-burgundy-700 mb-6">
                   <Palette className="h-4 w-4" />
-                  Complete Writing Suite
+                  Cash Conversion Platform
                 </span>
               </motion.div>
               <motion.h2
@@ -663,15 +657,15 @@ export default function Landing() {
               >
                 Everything You Need to{" "}
                 <span className="bg-gradient-to-r from-romance-burgundy-600 to-tender-500 bg-clip-text text-transparent">
-                  Ship Your Story
+                  Convert with Confidence
                 </span>
               </motion.h2>
               <motion.p
                 variants={fadeInUp}
                 className="text-lg sm:text-xl text-muted-foreground max-w-3xl mx-auto"
               >
-                Professional-grade tools designed for authors who demand excellence.
-                From first spark to finished manuscript.
+                Enterprise-grade tooling for finance teams that need fast conversion, total control,
+                and real-time visibility.
               </motion.p>
             </motion.div>
 
@@ -716,7 +710,7 @@ export default function Landing() {
           </div>
         </section>
 
-        {/* ========== AI PERSONAS SECTION ========== */}
+        {/* ========== CONVERSION MODES SECTION ========== */}
         <section className="py-28 bg-gradient-to-b from-romance-burgundy-50/40 via-background to-background relative overflow-hidden">
           {/* Background elements */}
           <div className="absolute top-20 right-10 w-64 h-64 bg-tender-200/30 rounded-full blur-3xl" />
@@ -733,24 +727,24 @@ export default function Landing() {
               <motion.div variants={fadeInUp}>
                 <span className="inline-flex items-center gap-2 rounded-full bg-tender-100/80 px-5 py-2 text-sm font-semibold text-tender-700 mb-6">
                   <Sparkles className="h-4 w-4" />
-                  AI-Powered Creativity
+                  Conversion Intelligence
                 </span>
               </motion.div>
               <motion.h2
                 variants={fadeInUp}
                 className="font-serif text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground mb-6"
               >
-                Meet Your{" "}
+                Choose Your{" "}
                 <span className="bg-gradient-to-r from-tender-500 to-romance-burgundy-500 bg-clip-text text-transparent">
-                  AI Writing Companions
+                  Conversion Strategy
                 </span>
               </motion.h2>
               <motion.p
                 variants={fadeInUp}
                 className="text-lg sm:text-xl text-muted-foreground max-w-3xl mx-auto"
               >
-                Three specialized AI personas, each trained for a distinct aspect of the creative process.
-                They understand your story's context and adapt to your voice.
+                Three conversion modes to match how your team moves money. Automate, schedule,
+                or execute instantly with full control.
               </motion.p>
             </motion.div>
 
@@ -761,7 +755,7 @@ export default function Landing() {
               viewport={{ once: true, margin: "-50px" }}
               variants={stagger}
             >
-              {aiPersonas.map((persona, index) => (
+              {conversionModes.map((persona, index) => (
                 <motion.div
                   key={persona.name}
                   variants={fadeInUp}
@@ -802,7 +796,7 @@ export default function Landing() {
         </section>
 
         {/* ========== WORKFLOW SECTION ========== */}
-        <section className="py-28 bg-card relative overflow-hidden">
+        <section id="workflow" className="py-28 bg-card relative overflow-hidden">
           <div className="absolute inset-0 bg-[linear-gradient(to_right,transparent_0%,rgba(219,39,119,0.03)_50%,transparent_100%)]" />
 
           <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -823,17 +817,17 @@ export default function Landing() {
                 variants={fadeInUp}
                 className="font-serif text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground mb-6"
               >
-                From Spark to{" "}
+                From Request to{" "}
                 <span className="bg-gradient-to-r from-romance-rose-gold-500 to-romance-champagne-500 bg-clip-text text-transparent">
-                  Bestseller
+                  Settlement
                 </span>
               </motion.h2>
               <motion.p
                 variants={fadeInUp}
                 className="text-lg sm:text-xl text-muted-foreground max-w-3xl mx-auto"
               >
-                A cinematic pipeline designed for romance authors and serial storytellers.
-                Every step optimized for creative flow.
+                A conversion workflow designed for speed, compliance, and clarity.
+                Every step optimized for treasury teams.
               </motion.p>
             </motion.div>
 
@@ -888,7 +882,7 @@ export default function Landing() {
         </section>
 
         {/* ========== TESTIMONIALS SECTION ========== */}
-        <section className="py-28 bg-gradient-to-b from-background via-tender-50/30 to-background relative overflow-hidden">
+        <section id="testimonials" className="py-28 bg-gradient-to-b from-background via-tender-50/30 to-background relative overflow-hidden">
           {/* Decorative elements */}
           <motion.div
             className="absolute top-20 left-[5%] opacity-5"
@@ -909,7 +903,7 @@ export default function Landing() {
               <motion.div variants={fadeInUp}>
                 <span className="inline-flex items-center gap-2 rounded-full bg-romance-champagne-100/80 px-5 py-2 text-sm font-semibold text-romance-champagne-700 mb-6">
                   <Award className="h-4 w-4" />
-                  Loved by Authors
+                  Loved by Finance Teams
                 </span>
               </motion.div>
               <motion.h2
@@ -918,14 +912,14 @@ export default function Landing() {
               >
                 What Our{" "}
                 <span className="bg-gradient-to-r from-romance-champagne-500 to-romance-rose-gold-500 bg-clip-text text-transparent">
-                  Authors Say
+                  Customers Say
                 </span>
               </motion.h2>
               <motion.p
                 variants={fadeInUp}
                 className="text-lg sm:text-xl text-muted-foreground max-w-3xl mx-auto"
               >
-                Join thousands of professional authors who have transformed their writing process with 88Away.
+                Join teams who have modernized their cash conversion and reduced FX costs.
               </motion.p>
             </motion.div>
 
@@ -958,7 +952,7 @@ export default function Landing() {
                         "{testimonial.quote}"
                       </p>
 
-                      {/* Author info */}
+                      {/* Customer info */}
                       <div className="flex items-center gap-4">
                         <div className="w-14 h-14 rounded-full bg-gradient-to-br from-romance-burgundy-400 to-tender-400 flex items-center justify-center text-white font-semibold text-lg shadow-lg">
                           {testimonial.image}
@@ -980,7 +974,7 @@ export default function Landing() {
         </section>
 
         {/* ========== COMPARISON SECTION ========== */}
-        <section className="py-28 bg-card relative overflow-hidden">
+        <section id="comparison" className="py-28 bg-card relative overflow-hidden">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
             <motion.div
               className="text-center mb-16"
@@ -1001,7 +995,7 @@ export default function Landing() {
               >
                 Built Different{" "}
                 <span className="bg-gradient-to-r from-romance-blush-500 to-romance-burgundy-500 bg-clip-text text-transparent">
-                  for Authors
+                  for Finance
                 </span>
               </motion.h2>
             </motion.div>
@@ -1054,7 +1048,7 @@ export default function Landing() {
         </section>
 
         {/* ========== PRICING SECTION ========== */}
-        <section className="py-28 bg-gradient-to-b from-background via-romance-champagne-50/30 to-background relative overflow-hidden">
+        <section id="pricing" className="py-28 bg-gradient-to-b from-background via-romance-champagne-50/30 to-background relative overflow-hidden">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <motion.div
               className="text-center mb-20"
@@ -1075,14 +1069,14 @@ export default function Landing() {
               >
                 Choose Your{" "}
                 <span className="bg-gradient-to-r from-romance-burgundy-500 to-romance-rose-gold-500 bg-clip-text text-transparent">
-                  Writing Journey
+                  Conversion Plan
                 </span>
               </motion.h2>
               <motion.p
                 variants={fadeInUp}
                 className="text-lg sm:text-xl text-muted-foreground max-w-3xl mx-auto"
               >
-                Transparent pricing with no hidden fees. Start free, upgrade when you're ready.
+                Transparent pricing with no hidden FX spreads. Start free, scale as you grow.
               </motion.p>
             </motion.div>
 
@@ -1152,7 +1146,7 @@ export default function Landing() {
               ))}
             </motion.div>
 
-            {/* Money-back guarantee */}
+            {/* Fee transparency note */}
             <motion.div
               className="text-center mt-12"
               initial="hidden"
@@ -1162,7 +1156,7 @@ export default function Landing() {
             >
               <div className="inline-flex items-center gap-3 px-6 py-3 rounded-full bg-green-50 border border-green-200">
                 <Shield className="h-5 w-5 text-green-600" />
-                <span className="text-green-700 font-medium">30-day money-back guarantee · No questions asked</span>
+                <span className="text-green-700 font-medium">Transparent fees · Mid-market pricing · No hidden spreads</span>
               </div>
             </motion.div>
           </div>
@@ -1181,21 +1175,21 @@ export default function Landing() {
             variants={float}
             animate="animate"
           >
-            <BookOpen className="h-20 w-20 text-white" strokeWidth={1} />
+            <DollarSign className="h-20 w-20 text-white" strokeWidth={1} />
           </motion.div>
           <motion.div
             className="absolute bottom-10 right-[10%] opacity-20"
             variants={floatDelayed}
             animate="animate"
           >
-            <Feather className="h-16 w-16 text-white" strokeWidth={1} />
+            <TrendingUp className="h-16 w-16 text-white" strokeWidth={1} />
           </motion.div>
           <motion.div
             className="absolute top-1/2 right-[20%] opacity-10"
             variants={floatSlow}
             animate="animate"
           >
-            <Heart className="h-24 w-24 text-white" strokeWidth={1} />
+            <ShieldCheck className="h-24 w-24 text-white" strokeWidth={1} />
           </motion.div>
 
           <div className="relative max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
@@ -1209,14 +1203,14 @@ export default function Landing() {
                 variants={fadeInUp}
                 className="font-serif text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-6"
               >
-                Your Story Deserves the Best Tools
+                Your Cash Deserves the Best Rates
               </motion.h2>
               <motion.p
                 variants={fadeInUp}
                 className="text-lg sm:text-xl text-white/80 mb-10 max-w-2xl mx-auto"
               >
-                Join thousands of authors who have transformed their writing process.
-                Start your free trial today and experience the difference.
+                Join finance teams that converted billions with confidence.
+                Start converting today and see the difference.
               </motion.p>
               <motion.div
                 variants={fadeInUp}
@@ -1229,7 +1223,7 @@ export default function Landing() {
                   data-testid="button-cta-start"
                 >
                   <Zap className="mr-2 h-5 w-5" />
-                  Start Your Free Trial
+                  Start Converting
                   <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
                 </Button>
                 <Button
@@ -1238,14 +1232,14 @@ export default function Landing() {
                   className="text-lg px-10 py-7 border-2 border-white/30 text-white bg-white/10 hover:bg-white/20 backdrop-blur-sm"
                 >
                   <Mail className="mr-2 h-5 w-5" />
-                  Talk to Sales
+                  Talk to Treasury
                 </Button>
               </motion.div>
               <motion.p
                 variants={fadeIn}
                 className="mt-8 text-sm text-white/60"
               >
-                No credit card required · 14-day free trial · Cancel anytime
+                No credit card required · Free starter plan · Cancel anytime
               </motion.p>
             </motion.div>
           </div>
@@ -1263,8 +1257,8 @@ export default function Landing() {
                   className="h-12 w-auto brightness-0 invert opacity-90 mb-6"
                 />
                 <p className="text-gray-400 max-w-md leading-relaxed mb-6">
-                  The premier writing platform for professional authors. AI-powered tools,
-                  collaborative workflows, and seamless publishing - all in one place.
+                  The cash conversion platform for modern finance teams. Real-time FX pricing,
+                  automated approvals, and instant settlement in one place.
                 </p>
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-1">
@@ -1280,10 +1274,10 @@ export default function Landing() {
               <div>
                 <h4 className="font-semibold text-white mb-4">Product</h4>
                 <ul className="space-y-3 text-gray-400">
-                  <li><a href="/romance/series" className="hover:text-white transition-colors">Features</a></li>
+                  <li><a href="#features" className="hover:text-white transition-colors">Features</a></li>
+                  <li><a href="#workflow" className="hover:text-white transition-colors">How it Works</a></li>
                   <li><a href="#pricing" className="hover:text-white transition-colors">Pricing</a></li>
-                  <li><a href="/romance/publishing" className="hover:text-white transition-colors">Publishing</a></li>
-                  <li><a href="/romance/tropes" className="hover:text-white transition-colors">Trope Library</a></li>
+                  <li><a href="#comparison" className="hover:text-white transition-colors">Why 88Away</a></li>
                 </ul>
               </div>
 
