@@ -7,10 +7,18 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Input } from "@/components/ui/input";
+import {
   ArrowRight,
   BookOpen,
   Check,
   ChevronRight,
+  ChevronDown,
   Crown,
   Edit3,
   Feather,
@@ -21,6 +29,7 @@ import {
   Lightbulb,
   Mail,
   MapPin,
+  Menu,
   Palette,
   PenTool,
   Shield,
@@ -36,12 +45,28 @@ import {
   Quote,
   Play,
   CheckCircle2,
+  X,
+  MousePointer,
+  Rocket,
+  Clock,
+  DollarSign,
+  HelpCircle,
+  Send,
+  Twitter,
+  Linkedin,
+  Github,
+  Instagram,
+  ArrowUpRight,
+  Newspaper,
+  Download,
+  Upload,
+  RefreshCw,
 } from "lucide-react";
 import logo from "@/assets/88away-logo-pink.png";
 import logoWhite from "@/assets/88away-logo-white.png";
 import { Seo } from "@/components/seo";
-import { motion } from "framer-motion";
-import { useState, useEffect } from "react";
+import { motion, useScroll, useTransform, AnimatePresence } from "framer-motion";
+import { useState, useEffect, useRef } from "react";
 
 // Animation variants
 const fadeInUp = {
@@ -61,6 +86,16 @@ const stagger = {
 const scaleIn = {
   hidden: { opacity: 0, scale: 0.9 },
   visible: { opacity: 1, scale: 1, transition: { duration: 0.5, ease: "easeOut" } }
+};
+
+const slideInLeft = {
+  hidden: { opacity: 0, x: -60 },
+  visible: { opacity: 1, x: 0, transition: { duration: 0.8, ease: "easeOut" } }
+};
+
+const slideInRight = {
+  hidden: { opacity: 0, x: 60 },
+  visible: { opacity: 1, x: 0, transition: { duration: 0.8, ease: "easeOut" } }
 };
 
 // Floating animation for decorative elements
@@ -85,6 +120,14 @@ const floatSlow = {
   }
 };
 
+const pulse = {
+  animate: {
+    scale: [1, 1.05, 1],
+    opacity: [0.7, 1, 0.7],
+    transition: { duration: 3, repeat: Infinity, ease: "easeInOut" }
+  }
+};
+
 // Counter animation hook
 function useCounter(end: number, duration: number = 2000) {
   const [count, setCount] = useState(0);
@@ -106,6 +149,778 @@ function useCounter(end: number, duration: number = 2000) {
   }, [end, duration, hasStarted]);
 
   return { count, start: () => setHasStarted(true) };
+}
+
+// Sticky Header Component
+function StickyHeader() {
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 50);
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const navLinks = [
+    { name: "Features", href: "#features" },
+    { name: "AI Companions", href: "#ai-companions" },
+    { name: "Pricing", href: "#pricing" },
+    { name: "FAQ", href: "#faq" },
+  ];
+
+  return (
+    <>
+      <motion.header
+        initial={{ y: -100 }}
+        animate={{ y: 0 }}
+        transition={{ duration: 0.5, ease: "easeOut" }}
+        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
+          isScrolled
+            ? "bg-white/90 backdrop-blur-xl shadow-lg shadow-romance-burgundy-500/5 border-b border-romance-burgundy-100/50"
+            : "bg-transparent"
+        }`}
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16 md:h-20">
+            {/* Logo */}
+            <a href="/" className="flex items-center gap-2">
+              <img
+                src={logo}
+                alt="88Away"
+                className={`h-8 md:h-10 w-auto transition-all duration-300 ${
+                  isScrolled ? "drop-shadow-sm" : "drop-shadow-lg"
+                }`}
+              />
+            </a>
+
+            {/* Desktop Navigation */}
+            <nav className="hidden md:flex items-center gap-8">
+              {navLinks.map((link) => (
+                <a
+                  key={link.name}
+                  href={link.href}
+                  className={`text-sm font-medium transition-colors duration-300 hover:text-romance-burgundy-600 ${
+                    isScrolled ? "text-foreground" : "text-foreground/80"
+                  }`}
+                >
+                  {link.name}
+                </a>
+              ))}
+            </nav>
+
+            {/* CTA Buttons */}
+            <div className="hidden md:flex items-center gap-4">
+              <Button
+                variant="ghost"
+                className="text-sm font-medium"
+                onClick={() => (window.location.href = "/api/login")}
+              >
+                Sign In
+              </Button>
+              <Button
+                className={`text-sm font-medium transition-all duration-300 ${
+                  isScrolled
+                    ? "bg-gradient-to-r from-romance-burgundy-600 to-romance-burgundy-700 shadow-md"
+                    : "bg-gradient-to-r from-romance-burgundy-600 to-romance-burgundy-700 shadow-lg shadow-romance-burgundy-500/25"
+                }`}
+                onClick={() => (window.location.href = "/api/login")}
+              >
+                Start Free
+                <ArrowRight className="ml-1 h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Mobile Menu Button */}
+            <button
+              className="md:hidden p-2 rounded-lg hover:bg-romance-burgundy-100/50 transition-colors"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            >
+              {isMobileMenuOpen ? (
+                <X className="h-6 w-6 text-foreground" />
+              ) : (
+                <Menu className="h-6 w-6 text-foreground" />
+              )}
+            </button>
+          </div>
+        </div>
+      </motion.header>
+
+      {/* Mobile Menu */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-x-0 top-16 z-40 md:hidden bg-white/95 backdrop-blur-xl border-b border-romance-burgundy-100 shadow-xl"
+          >
+            <div className="px-4 py-6 space-y-4">
+              {navLinks.map((link) => (
+                <a
+                  key={link.name}
+                  href={link.href}
+                  className="block py-3 text-lg font-medium text-foreground hover:text-romance-burgundy-600 transition-colors"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  {link.name}
+                </a>
+              ))}
+              <div className="pt-4 border-t border-border space-y-3">
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => (window.location.href = "/api/login")}
+                >
+                  Sign In
+                </Button>
+                <Button
+                  className="w-full bg-gradient-to-r from-romance-burgundy-600 to-romance-burgundy-700"
+                  onClick={() => (window.location.href = "/api/login")}
+                >
+                  Start Free Trial
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
+
+// Product Preview Component with Interactive Mockup
+function ProductPreview() {
+  const [activeTab, setActiveTab] = useState(0);
+  const tabs = [
+    { name: "Story Bible", icon: <BookOpen className="h-4 w-4" /> },
+    { name: "AI Assistant", icon: <Sparkles className="h-4 w-4" /> },
+    { name: "Collaboration", icon: <Users className="h-4 w-4" /> },
+  ];
+
+  const previews = [
+    {
+      title: "Organize Your Universe",
+      description: "Characters, locations, timelines, and plot threads - all interconnected and always in sync.",
+      features: ["Character relationship maps", "World-building database", "Timeline visualization", "Plot arc tracker"],
+    },
+    {
+      title: "AI That Understands Story",
+      description: "Context-aware assistance that knows your characters, their voices, and your unique style.",
+      features: ["30K word context window", "Voice matching", "Scene generation", "Consistency checking"],
+    },
+    {
+      title: "Write Together, Seamlessly",
+      description: "Real-time collaboration with version control designed for creative teams.",
+      features: ["Live cursor presence", "Branch & merge", "Inline comments", "Role-based access"],
+    },
+  ];
+
+  return (
+    <section className="py-28 bg-gradient-to-b from-background via-romance-burgundy-50/20 to-background relative overflow-hidden">
+      {/* Background effects */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(219,39,119,0.05),_transparent_70%)]" />
+
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <motion.div
+          className="text-center mb-16"
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true }}
+          variants={stagger}
+        >
+          <motion.div variants={fadeInUp}>
+            <span className="inline-flex items-center gap-2 rounded-full bg-tender-100/80 px-5 py-2 text-sm font-semibold text-tender-700 mb-6">
+              <MousePointer className="h-4 w-4" />
+              Interactive Preview
+            </span>
+          </motion.div>
+          <motion.h2
+            variants={fadeInUp}
+            className="font-serif text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground mb-6"
+          >
+            See It In{" "}
+            <span className="bg-gradient-to-r from-tender-500 to-romance-burgundy-500 bg-clip-text text-transparent">
+              Action
+            </span>
+          </motion.h2>
+        </motion.div>
+
+        <motion.div
+          className="grid lg:grid-cols-2 gap-12 items-center"
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true }}
+          variants={stagger}
+        >
+          {/* Left: Interactive Tabs */}
+          <motion.div variants={slideInLeft} className="space-y-8">
+            {/* Tab Buttons */}
+            <div className="flex flex-wrap gap-3">
+              {tabs.map((tab, index) => (
+                <button
+                  key={tab.name}
+                  onClick={() => setActiveTab(index)}
+                  className={`flex items-center gap-2 px-5 py-3 rounded-full text-sm font-medium transition-all duration-300 ${
+                    activeTab === index
+                      ? "bg-gradient-to-r from-romance-burgundy-500 to-tender-500 text-white shadow-lg shadow-romance-burgundy-500/25"
+                      : "bg-white border border-border hover:border-romance-burgundy-200 text-foreground hover:shadow-md"
+                  }`}
+                >
+                  {tab.icon}
+                  {tab.name}
+                </button>
+              ))}
+            </div>
+
+            {/* Tab Content */}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+                className="space-y-6"
+              >
+                <h3 className="text-2xl font-semibold text-foreground">
+                  {previews[activeTab].title}
+                </h3>
+                <p className="text-lg text-muted-foreground leading-relaxed">
+                  {previews[activeTab].description}
+                </p>
+                <ul className="space-y-3">
+                  {previews[activeTab].features.map((feature) => (
+                    <li key={feature} className="flex items-center gap-3">
+                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-gradient-to-br from-romance-burgundy-100 to-tender-100 flex items-center justify-center">
+                        <Check className="h-3.5 w-3.5 text-romance-burgundy-600" />
+                      </div>
+                      <span className="text-foreground">{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Button
+                  className="mt-4 bg-gradient-to-r from-romance-burgundy-600 to-romance-burgundy-700 shadow-lg shadow-romance-burgundy-500/25"
+                  onClick={() => (window.location.href = "/api/login")}
+                >
+                  Try It Free
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </motion.div>
+            </AnimatePresence>
+          </motion.div>
+
+          {/* Right: Mockup */}
+          <motion.div variants={slideInRight} className="relative">
+            <div className="relative rounded-2xl overflow-hidden shadow-2xl shadow-romance-burgundy-500/20 border border-romance-burgundy-100">
+              {/* Browser Chrome */}
+              <div className="bg-gradient-to-r from-gray-100 to-gray-50 px-4 py-3 border-b border-gray-200 flex items-center gap-3">
+                <div className="flex gap-2">
+                  <div className="w-3 h-3 rounded-full bg-red-400" />
+                  <div className="w-3 h-3 rounded-full bg-yellow-400" />
+                  <div className="w-3 h-3 rounded-full bg-green-400" />
+                </div>
+                <div className="flex-1 bg-white rounded-lg px-4 py-1.5 text-sm text-gray-500 border border-gray-200">
+                  app.88away.com
+                </div>
+              </div>
+
+              {/* App Interface Mockup */}
+              <div className="bg-gradient-to-br from-white to-romance-burgundy-50/30 p-6 min-h-[400px]">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={activeTab}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-4"
+                  >
+                    {activeTab === 0 && (
+                      <>
+                        <div className="flex items-center gap-3 mb-6">
+                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-romance-burgundy-400 to-romance-burgundy-600 flex items-center justify-center">
+                            <BookOpen className="h-5 w-5 text-white" />
+                          </div>
+                          <div>
+                            <p className="font-semibold text-foreground">The Midnight Rose</p>
+                            <p className="text-sm text-muted-foreground">Story Bible</p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          {["Characters", "Locations", "Timeline", "Plot Arcs"].map((item, i) => (
+                            <div key={item} className="p-4 rounded-xl bg-white border border-romance-burgundy-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+                              <p className="font-medium text-foreground">{item}</p>
+                              <p className="text-xs text-muted-foreground mt-1">{12 + i * 3} entries</p>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                    {activeTab === 1 && (
+                      <>
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-tender-400 to-tender-600 flex items-center justify-center">
+                            <Sparkles className="h-5 w-5 text-white" />
+                          </div>
+                          <div>
+                            <p className="font-semibold text-foreground">Muse AI</p>
+                            <p className="text-sm text-muted-foreground">Creative Assistant</p>
+                          </div>
+                        </div>
+                        <div className="space-y-3">
+                          <div className="p-4 rounded-xl bg-tender-50 border border-tender-200">
+                            <p className="text-sm text-foreground italic">"Continue the scene where Elena discovers the hidden letter..."</p>
+                          </div>
+                          <div className="p-4 rounded-xl bg-white border border-romance-burgundy-100 shadow-sm">
+                            <p className="text-sm text-muted-foreground">Elena's fingers trembled as she unfolded the yellowed paper, the familiar scent of lavender rising from its creases...</p>
+                            <motion.div
+                              className="w-2 h-4 bg-romance-burgundy-400 inline-block ml-1"
+                              animate={{ opacity: [1, 0] }}
+                              transition={{ duration: 0.8, repeat: Infinity }}
+                            />
+                          </div>
+                        </div>
+                      </>
+                    )}
+                    {activeTab === 2 && (
+                      <>
+                        <div className="flex items-center justify-between mb-4">
+                          <p className="font-semibold text-foreground">Chapter 12: The Revelation</p>
+                          <div className="flex -space-x-2">
+                            {["IC", "MR", "CV"].map((initials, i) => (
+                              <div
+                                key={initials}
+                                className="w-8 h-8 rounded-full bg-gradient-to-br from-romance-burgundy-400 to-tender-400 flex items-center justify-center text-white text-xs font-semibold border-2 border-white"
+                              >
+                                {initials}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="space-y-2 p-4 rounded-xl bg-white border border-romance-burgundy-100 shadow-sm">
+                          <p className="text-sm text-foreground">The garden was silent except for the rustle of autumn leaves...</p>
+                          <div className="flex items-center gap-2 text-xs">
+                            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                            <span className="text-muted-foreground">Ivy is editing...</span>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+            </div>
+
+            {/* Decorative elements */}
+            <motion.div
+              className="absolute -top-4 -right-4 w-20 h-20 bg-gradient-to-br from-romance-champagne-200 to-romance-rose-gold-200 rounded-full blur-2xl opacity-60"
+              variants={pulse}
+              animate="animate"
+            />
+            <motion.div
+              className="absolute -bottom-6 -left-6 w-32 h-32 bg-gradient-to-br from-tender-200 to-romance-burgundy-200 rounded-full blur-2xl opacity-40"
+              variants={pulse}
+              animate="animate"
+            />
+          </motion.div>
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
+// Success Stories Component
+function SuccessStories() {
+  const stories = [
+    {
+      name: "Sarah Mitchell",
+      title: "From Hobbyist to Full-Time Author",
+      image: "SM",
+      before: { books: 0, income: "$0/mo" },
+      after: { books: 12, income: "$8,500/mo" },
+      quote: "88Away helped me publish my first series in 8 months. The AI companions and story bible kept me organized in ways I never thought possible.",
+      achievement: "12 books in 18 months",
+      color: "from-romance-burgundy-400 to-tender-400",
+    },
+    {
+      name: "Marcus Chen",
+      title: "Scaled from Solo to Team",
+      image: "MC",
+      before: { books: 4, income: "$2,000/mo" },
+      after: { books: 24, income: "$32,000/mo" },
+      quote: "The collaboration features let me scale to a team of 5 writers while maintaining consistent voice and quality across all our series.",
+      achievement: "6x revenue growth",
+      color: "from-tender-400 to-romance-rose-gold-400",
+    },
+    {
+      name: "Northwind Press",
+      title: "Publishing House Transformation",
+      image: "NP",
+      before: { books: 40, income: "12-mo cycles" },
+      after: { books: 120, income: "4-mo cycles" },
+      quote: "We consolidated 6 different tools into 88Away. Our editorial workflow is now 3x faster with better version control than ever.",
+      achievement: "3x faster production",
+      color: "from-romance-rose-gold-400 to-romance-champagne-400",
+    },
+  ];
+
+  return (
+    <section className="py-28 bg-gradient-to-b from-tender-50/40 via-background to-background relative overflow-hidden">
+      <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top_right,_rgba(244,114,182,0.1),_transparent_50%)]" />
+
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <motion.div
+          className="text-center mb-16"
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true }}
+          variants={stagger}
+        >
+          <motion.div variants={fadeInUp}>
+            <span className="inline-flex items-center gap-2 rounded-full bg-romance-rose-gold-100/80 px-5 py-2 text-sm font-semibold text-romance-rose-gold-700 mb-6">
+              <Rocket className="h-4 w-4" />
+              Success Stories
+            </span>
+          </motion.div>
+          <motion.h2
+            variants={fadeInUp}
+            className="font-serif text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground mb-6"
+          >
+            Real Results from{" "}
+            <span className="bg-gradient-to-r from-romance-rose-gold-500 to-romance-champagne-500 bg-clip-text text-transparent">
+              Real Authors
+            </span>
+          </motion.h2>
+          <motion.p
+            variants={fadeInUp}
+            className="text-lg sm:text-xl text-muted-foreground max-w-3xl mx-auto"
+          >
+            See how authors and publishing teams have transformed their careers with 88Away.
+          </motion.p>
+        </motion.div>
+
+        <motion.div
+          className="grid md:grid-cols-3 gap-8"
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-50px" }}
+          variants={stagger}
+        >
+          {stories.map((story, index) => (
+            <motion.div key={story.name} variants={fadeInUp}>
+              <Card className="group relative h-full overflow-hidden border-border/60 bg-white/90 backdrop-blur-sm transition-all duration-500 hover:shadow-2xl hover:-translate-y-2">
+                {/* Top gradient bar */}
+                <div className={`absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r ${story.color}`} />
+
+                <CardContent className="p-8">
+                  {/* Author info */}
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${story.color} flex items-center justify-center text-white font-bold text-xl shadow-lg`}>
+                      {story.image}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-lg text-foreground">{story.name}</p>
+                      <p className="text-sm text-muted-foreground">{story.title}</p>
+                    </div>
+                  </div>
+
+                  {/* Before/After Stats */}
+                  <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div className="p-4 rounded-xl bg-gray-50 border border-gray-100">
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Before</p>
+                      <p className="text-lg font-bold text-foreground">{story.before.books} books</p>
+                      <p className="text-sm text-muted-foreground">{story.before.income}</p>
+                    </div>
+                    <div className="p-4 rounded-xl bg-gradient-to-br from-green-50 to-emerald-50 border border-green-100">
+                      <p className="text-xs uppercase tracking-wide text-green-600 mb-1">After</p>
+                      <p className="text-lg font-bold text-green-700">{story.after.books} books</p>
+                      <p className="text-sm text-green-600">{story.after.income}</p>
+                    </div>
+                  </div>
+
+                  {/* Quote */}
+                  <p className="text-muted-foreground leading-relaxed mb-6 italic">
+                    "{story.quote}"
+                  </p>
+
+                  {/* Achievement badge */}
+                  <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r ${story.color} text-white text-sm font-medium shadow-md`}>
+                    <Award className="h-4 w-4" />
+                    {story.achievement}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
+// Integrations Component
+function Integrations() {
+  const integrations = [
+    { name: "Amazon KDP", category: "Publishing" },
+    { name: "Draft2Digital", category: "Distribution" },
+    { name: "Vellum", category: "Formatting" },
+    { name: "BookFunnel", category: "Delivery" },
+    { name: "Mailchimp", category: "Email" },
+    { name: "Canva", category: "Design" },
+    { name: "Google Docs", category: "Import" },
+    { name: "Scrivener", category: "Import" },
+  ];
+
+  return (
+    <section className="py-20 bg-card border-y border-border/40">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <motion.div
+          className="text-center mb-12"
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true }}
+          variants={fadeIn}
+        >
+          <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground mb-4">
+            Seamless Integrations
+          </p>
+          <h3 className="text-2xl font-semibold text-foreground">
+            Works with your favorite tools
+          </h3>
+        </motion.div>
+
+        <motion.div
+          className="flex flex-wrap justify-center gap-4"
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true }}
+          variants={stagger}
+        >
+          {integrations.map((integration) => (
+            <motion.div
+              key={integration.name}
+              variants={scaleIn}
+              className="group flex items-center gap-3 px-6 py-4 rounded-2xl bg-white border border-border/60 shadow-sm hover:shadow-lg hover:border-romance-burgundy-200 transition-all duration-300 cursor-pointer"
+            >
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-romance-burgundy-100 to-tender-100 flex items-center justify-center">
+                <RefreshCw className="h-5 w-5 text-romance-burgundy-600" />
+              </div>
+              <div>
+                <p className="font-medium text-foreground group-hover:text-romance-burgundy-700 transition-colors">
+                  {integration.name}
+                </p>
+                <p className="text-xs text-muted-foreground">{integration.category}</p>
+              </div>
+            </motion.div>
+          ))}
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
+// FAQ Component
+function FAQ() {
+  const faqs = [
+    {
+      question: "How does the AI understand my story's context?",
+      answer: "Our AI maintains a 30,000-word context window that includes your story bible, character profiles, and recent chapters. It learns your writing style, character voices, and narrative preferences to provide contextually relevant suggestions that feel like they're coming from a co-author who truly knows your story.",
+    },
+    {
+      question: "Can I collaborate with my editor or co-author in real-time?",
+      answer: "Absolutely! 88Away offers Google Docs-style real-time collaboration with live cursor presence, inline commenting, and suggestion modes. You can also use branching workflows to explore different narrative directions and merge the best elements together.",
+    },
+    {
+      question: "What export formats are supported?",
+      answer: "We support ePub, PDF, DOCX, Markdown, and KDP-ready packages with proper formatting. You can also connect directly to publishing platforms like Amazon KDP and Draft2Digital for one-click publishing.",
+    },
+    {
+      question: "Is my work secure and private?",
+      answer: "Your manuscripts are encrypted at rest and in transit using AES-256 encryption. We never use your content to train AI models, and you retain 100% ownership of everything you create. Enterprise plans include additional security features like SSO and audit logs.",
+    },
+    {
+      question: "Can I import my existing work from Scrivener or Word?",
+      answer: "Yes! We support imports from Scrivener, Word, Google Docs, and plain text files. Your formatting, chapters, and notes will be preserved and organized into our story bible system automatically.",
+    },
+    {
+      question: "What's included in the free trial?",
+      answer: "The 14-day free trial includes full access to the Professional plan features: 5 active projects, advanced AI assistance, team collaboration, and all export formats. No credit card required to start.",
+    },
+  ];
+
+  return (
+    <section id="faq" className="py-28 bg-background relative overflow-hidden">
+      <div className="absolute top-0 left-0 w-1/2 h-1/2 bg-gradient-to-br from-romance-burgundy-50/30 to-transparent" />
+
+      <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <motion.div
+          className="text-center mb-16"
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true }}
+          variants={stagger}
+        >
+          <motion.div variants={fadeInUp}>
+            <span className="inline-flex items-center gap-2 rounded-full bg-romance-champagne-100/80 px-5 py-2 text-sm font-semibold text-romance-champagne-700 mb-6">
+              <HelpCircle className="h-4 w-4" />
+              FAQ
+            </span>
+          </motion.div>
+          <motion.h2
+            variants={fadeInUp}
+            className="font-serif text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground mb-6"
+          >
+            Frequently Asked{" "}
+            <span className="bg-gradient-to-r from-romance-champagne-500 to-romance-rose-gold-500 bg-clip-text text-transparent">
+              Questions
+            </span>
+          </motion.h2>
+        </motion.div>
+
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true }}
+          variants={fadeInUp}
+        >
+          <Accordion type="single" collapsible className="space-y-4">
+            {faqs.map((faq, index) => (
+              <AccordionItem
+                key={index}
+                value={`item-${index}`}
+                className="border border-border/60 rounded-2xl px-6 bg-white/80 backdrop-blur-sm shadow-sm hover:shadow-md transition-shadow overflow-hidden"
+              >
+                <AccordionTrigger className="text-left font-medium text-foreground hover:text-romance-burgundy-700 py-5 [&[data-state=open]>svg]:rotate-180">
+                  {faq.question}
+                </AccordionTrigger>
+                <AccordionContent className="text-muted-foreground leading-relaxed pb-5">
+                  {faq.answer}
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </motion.div>
+
+        <motion.div
+          className="text-center mt-12"
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true }}
+          variants={fadeIn}
+        >
+          <p className="text-muted-foreground mb-4">Still have questions?</p>
+          <Button variant="outline" className="border-romance-burgundy-200 hover:border-romance-burgundy-400">
+            <Mail className="mr-2 h-4 w-4" />
+            Contact Support
+          </Button>
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
+// Newsletter Component
+function Newsletter() {
+  const [email, setEmail] = useState("");
+  const [isSubmitted, setIsSubmitted] = useState(false);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (email) {
+      setIsSubmitted(true);
+      setTimeout(() => {
+        setIsSubmitted(false);
+        setEmail("");
+      }, 3000);
+    }
+  };
+
+  return (
+    <section className="py-20 bg-gradient-to-r from-romance-burgundy-50 via-tender-50 to-romance-rose-gold-50 border-y border-romance-burgundy-100/50">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <motion.div
+          className="text-center"
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true }}
+          variants={stagger}
+        >
+          <motion.div variants={fadeInUp} className="flex justify-center mb-6">
+            <div className="p-4 rounded-2xl bg-white shadow-lg shadow-romance-burgundy-500/10">
+              <Newspaper className="h-8 w-8 text-romance-burgundy-600" />
+            </div>
+          </motion.div>
+          <motion.h3
+            variants={fadeInUp}
+            className="font-serif text-2xl sm:text-3xl font-bold text-foreground mb-4"
+          >
+            Get Writing Tips & Platform Updates
+          </motion.h3>
+          <motion.p
+            variants={fadeInUp}
+            className="text-muted-foreground mb-8 max-w-xl mx-auto"
+          >
+            Join 15,000+ authors receiving weekly insights on craft, productivity, and publishing success.
+          </motion.p>
+          <motion.form
+            variants={fadeInUp}
+            onSubmit={handleSubmit}
+            className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto"
+          >
+            <div className="relative flex-1">
+              <Input
+                type="email"
+                placeholder="Enter your email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full h-12 pl-4 pr-4 rounded-xl border-romance-burgundy-200 focus:border-romance-burgundy-400 focus:ring-romance-burgundy-400 bg-white"
+              />
+            </div>
+            <Button
+              type="submit"
+              className="h-12 px-6 bg-gradient-to-r from-romance-burgundy-600 to-romance-burgundy-700 hover:from-romance-burgundy-700 hover:to-romance-burgundy-800 shadow-lg shadow-romance-burgundy-500/25 rounded-xl"
+            >
+              <AnimatePresence mode="wait">
+                {isSubmitted ? (
+                  <motion.span
+                    key="success"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    className="flex items-center gap-2"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    Subscribed!
+                  </motion.span>
+                ) : (
+                  <motion.span
+                    key="subscribe"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    className="flex items-center gap-2"
+                  >
+                    Subscribe
+                    <Send className="h-4 w-4" />
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </Button>
+          </motion.form>
+          <motion.p
+            variants={fadeIn}
+            className="text-xs text-muted-foreground mt-4"
+          >
+            No spam. Unsubscribe anytime.
+          </motion.p>
+        </motion.div>
+      </div>
+    </section>
+  );
 }
 
 export default function Landing() {
@@ -221,68 +1036,6 @@ export default function Landing() {
     },
   ];
 
-  const workflowSteps = [
-    {
-      step: "01",
-      title: "Capture Your Vision",
-      description: "Start with tropes, themes, and story seeds. Our adaptive templates help you crystallize your creative vision in minutes.",
-      icon: <Feather className="h-6 w-6" />,
-      color: "text-romance-burgundy-600",
-      time: "5 min setup"
-    },
-    {
-      step: "02",
-      title: "Structure & Plan",
-      description: "AI companions help create beat sheets, POV maps, and production schedules. See your entire series architecture at a glance.",
-      icon: <Layers className="h-6 w-6" />,
-      color: "text-tender-600",
-      time: "15 min planning"
-    },
-    {
-      step: "03",
-      title: "Write & Collaborate",
-      description: "Invite co-authors with role-based access. Use branching workflows, inline comments, and merge-ready diffs for seamless teamwork.",
-      icon: <Users className="h-6 w-6" />,
-      color: "text-romance-rose-gold-600",
-      time: "Real-time"
-    },
-    {
-      step: "04",
-      title: "Publish & Grow",
-      description: "Export to any format. Push to KDP, Draft2Digital, and more. Track performance with built-in royalty analytics.",
-      icon: <Globe className="h-6 w-6" />,
-      color: "text-romance-champagne-600",
-      time: "One-click"
-    },
-  ];
-
-  const testimonials = [
-    {
-      quote: "We've replaced six different tools with 88Away. The branching editor keeps creative chaos organized without losing spontaneity. My productivity has tripled.",
-      name: "Ivy Calder",
-      role: "USA Today Bestselling Author",
-      metric: "8-book series",
-      image: "IC",
-      rating: 5,
-    },
-    {
-      quote: "Our writers' room finally has a single source of truth. Version diffing plus AI personas lets junior writers deliver senior-level drafts. Game changer.",
-      name: "Mika Ren",
-      role: "Head of Story, Lumen Studios",
-      metric: "12 person team",
-      image: "MR",
-      rating: 5,
-    },
-    {
-      quote: "From timeline planning to polished copy, 88Away covers the entire workflow. The Muse persona is now a non-negotiable creative partner for our imprint.",
-      name: "Cassidy Vale",
-      role: "Editor-in-Chief, Northwind Press",
-      metric: "4 imprints managed",
-      image: "CV",
-      rating: 5,
-    },
-  ];
-
   const plans = [
     {
       name: "Starter",
@@ -334,16 +1087,6 @@ export default function Landing() {
       cta: "Contact Sales",
       highlight: false,
     },
-  ];
-
-  const comparisonFeatures = [
-    { feature: "AI Writing Assistance", us: true, others: "Limited" },
-    { feature: "Story Bible Database", us: true, others: false },
-    { feature: "Real-time Collaboration", us: true, others: "Basic" },
-    { feature: "Version Control & Branching", us: true, others: false },
-    { feature: "Series Management", us: true, others: false },
-    { feature: "One-click Publishing", us: true, others: "Manual" },
-    { feature: "Royalty Analytics", us: true, others: false },
   ];
 
   return (
@@ -418,9 +1161,11 @@ export default function Landing() {
       />
 
       <div className="min-h-screen bg-background overflow-hidden">
+        {/* Sticky Header */}
+        <StickyHeader />
 
         {/* ========== HERO SECTION ========== */}
-        <section className="relative min-h-[100vh] flex items-center justify-center overflow-hidden">
+        <section className="relative min-h-[100vh] flex items-center justify-center overflow-hidden pt-20">
           {/* Animated background layers */}
           <div className="absolute inset-0 bg-gradient-to-b from-romance-burgundy-50/80 via-background to-background" />
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(244,114,182,0.25),_transparent_50%)]" />
@@ -561,6 +1306,15 @@ export default function Landing() {
                   No credit card required · 14-day free trial · Cancel anytime
                 </p>
               </motion.div>
+
+              {/* Scroll indicator */}
+              <motion.div
+                className="absolute bottom-8 left-1/2 -translate-x-1/2"
+                animate={{ y: [0, 10, 0] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              >
+                <ChevronDown className="h-8 w-8 text-romance-burgundy-300" />
+              </motion.div>
             </motion.div>
           </div>
 
@@ -637,8 +1391,11 @@ export default function Landing() {
           </div>
         </section>
 
+        {/* ========== PRODUCT PREVIEW SECTION ========== */}
+        <ProductPreview />
+
         {/* ========== PLATFORM FEATURES SECTION ========== */}
-        <section className="py-28 bg-background relative overflow-hidden">
+        <section id="features" className="py-28 bg-background relative overflow-hidden">
           {/* Background decoration */}
           <div className="absolute top-0 right-0 w-1/2 h-1/2 bg-gradient-to-bl from-romance-burgundy-50/50 to-transparent" />
           <div className="absolute bottom-0 left-0 w-1/2 h-1/2 bg-gradient-to-tr from-tender-50/50 to-transparent" />
@@ -717,7 +1474,7 @@ export default function Landing() {
         </section>
 
         {/* ========== AI PERSONAS SECTION ========== */}
-        <section className="py-28 bg-gradient-to-b from-romance-burgundy-50/40 via-background to-background relative overflow-hidden">
+        <section id="ai-companions" className="py-28 bg-gradient-to-b from-romance-burgundy-50/40 via-background to-background relative overflow-hidden">
           {/* Background elements */}
           <div className="absolute top-20 right-10 w-64 h-64 bg-tender-200/30 rounded-full blur-3xl" />
           <div className="absolute bottom-20 left-10 w-80 h-80 bg-romance-rose-gold-200/30 rounded-full blur-3xl" />
@@ -801,260 +1558,14 @@ export default function Landing() {
           </div>
         </section>
 
-        {/* ========== WORKFLOW SECTION ========== */}
-        <section className="py-28 bg-card relative overflow-hidden">
-          <div className="absolute inset-0 bg-[linear-gradient(to_right,transparent_0%,rgba(219,39,119,0.03)_50%,transparent_100%)]" />
+        {/* ========== SUCCESS STORIES SECTION ========== */}
+        <SuccessStories />
 
-          <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-            <motion.div
-              className="text-center mb-20"
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true }}
-              variants={stagger}
-            >
-              <motion.div variants={fadeInUp}>
-                <span className="inline-flex items-center gap-2 rounded-full bg-romance-rose-gold-100/80 px-5 py-2 text-sm font-semibold text-romance-rose-gold-700 mb-6">
-                  <Globe className="h-4 w-4" />
-                  Streamlined Workflow
-                </span>
-              </motion.div>
-              <motion.h2
-                variants={fadeInUp}
-                className="font-serif text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground mb-6"
-              >
-                From Spark to{" "}
-                <span className="bg-gradient-to-r from-romance-rose-gold-500 to-romance-champagne-500 bg-clip-text text-transparent">
-                  Bestseller
-                </span>
-              </motion.h2>
-              <motion.p
-                variants={fadeInUp}
-                className="text-lg sm:text-xl text-muted-foreground max-w-3xl mx-auto"
-              >
-                A cinematic pipeline designed for romance authors and serial storytellers.
-                Every step optimized for creative flow.
-              </motion.p>
-            </motion.div>
-
-            <motion.div
-              className="space-y-6"
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, margin: "-50px" }}
-              variants={stagger}
-            >
-              {workflowSteps.map((step, index) => (
-                <motion.div
-                  key={step.title}
-                  variants={fadeInUp}
-                  className="group"
-                >
-                  <div className="relative flex flex-col md:flex-row items-start gap-6 rounded-3xl border border-border/60 bg-background/80 backdrop-blur-sm p-8 shadow-sm transition-all duration-500 hover:shadow-xl hover:border-romance-burgundy-200 hover:-translate-y-1">
-                    {/* Step number */}
-                    <div className="flex-shrink-0 w-20 h-20 rounded-2xl bg-gradient-to-br from-romance-burgundy-100 to-tender-100 flex items-center justify-center shadow-inner">
-                      <span className="font-serif text-3xl font-bold bg-gradient-to-br from-romance-burgundy-600 to-tender-600 bg-clip-text text-transparent">
-                        {step.step}
-                      </span>
-                    </div>
-
-                    {/* Content */}
-                    <div className="flex-1">
-                      <div className="flex flex-wrap items-center gap-3 mb-3">
-                        <div className={`p-2 rounded-xl bg-muted ${step.color}`}>
-                          {step.icon}
-                        </div>
-                        <h3 className="text-xl font-semibold text-foreground">{step.title}</h3>
-                        <span className="px-3 py-1 rounded-full bg-romance-champagne-100 text-romance-champagne-700 text-sm font-medium">
-                          {step.time}
-                        </span>
-                      </div>
-                      <p className="text-muted-foreground leading-relaxed max-w-2xl">
-                        {step.description}
-                      </p>
-                    </div>
-
-                    {/* Arrow for next step */}
-                    {index < workflowSteps.length - 1 && (
-                      <div className="hidden md:flex absolute -bottom-6 left-1/2 transform -translate-x-1/2 z-10">
-                        <ChevronRight className="h-6 w-6 text-romance-burgundy-300 rotate-90" />
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              ))}
-            </motion.div>
-          </div>
-        </section>
-
-        {/* ========== TESTIMONIALS SECTION ========== */}
-        <section className="py-28 bg-gradient-to-b from-background via-tender-50/30 to-background relative overflow-hidden">
-          {/* Decorative elements */}
-          <motion.div
-            className="absolute top-20 left-[5%] opacity-5"
-            variants={floatSlow}
-            animate="animate"
-          >
-            <Quote className="h-48 w-48 text-romance-burgundy-600" />
-          </motion.div>
-
-          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <motion.div
-              className="text-center mb-20"
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true }}
-              variants={stagger}
-            >
-              <motion.div variants={fadeInUp}>
-                <span className="inline-flex items-center gap-2 rounded-full bg-romance-champagne-100/80 px-5 py-2 text-sm font-semibold text-romance-champagne-700 mb-6">
-                  <Award className="h-4 w-4" />
-                  Loved by Authors
-                </span>
-              </motion.div>
-              <motion.h2
-                variants={fadeInUp}
-                className="font-serif text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground mb-6"
-              >
-                What Our{" "}
-                <span className="bg-gradient-to-r from-romance-champagne-500 to-romance-rose-gold-500 bg-clip-text text-transparent">
-                  Authors Say
-                </span>
-              </motion.h2>
-              <motion.p
-                variants={fadeInUp}
-                className="text-lg sm:text-xl text-muted-foreground max-w-3xl mx-auto"
-              >
-                Join thousands of professional authors who have transformed their writing process with 88Away.
-              </motion.p>
-            </motion.div>
-
-            <motion.div
-              className="grid grid-cols-1 lg:grid-cols-3 gap-8"
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, margin: "-50px" }}
-              variants={stagger}
-            >
-              {testimonials.map((testimonial, index) => (
-                <motion.div
-                  key={testimonial.name}
-                  variants={fadeInUp}
-                >
-                  <Card className="group relative h-full overflow-hidden border-border/60 bg-white/90 backdrop-blur-sm transition-all duration-500 hover:shadow-2xl hover:-translate-y-3">
-                    {/* Top gradient */}
-                    <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-romance-burgundy-400 via-tender-400 to-romance-champagne-400" />
-
-                    <CardContent className="p-8">
-                      {/* Stars */}
-                      <div className="flex gap-1 mb-6">
-                        {[...Array(testimonial.rating)].map((_, i) => (
-                          <Star key={i} className="h-5 w-5 fill-romance-champagne-400 text-romance-champagne-400" />
-                        ))}
-                      </div>
-
-                      {/* Quote */}
-                      <p className="text-foreground leading-relaxed text-lg mb-8 italic">
-                        "{testimonial.quote}"
-                      </p>
-
-                      {/* Author info */}
-                      <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-romance-burgundy-400 to-tender-400 flex items-center justify-center text-white font-semibold text-lg shadow-lg">
-                          {testimonial.image}
-                        </div>
-                        <div className="flex-1">
-                          <p className="font-semibold text-foreground">{testimonial.name}</p>
-                          <p className="text-sm text-muted-foreground">{testimonial.role}</p>
-                        </div>
-                        <div className="px-3 py-1 rounded-full bg-romance-burgundy-100 text-romance-burgundy-700 text-xs font-medium">
-                          {testimonial.metric}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))}
-            </motion.div>
-          </div>
-        </section>
-
-        {/* ========== COMPARISON SECTION ========== */}
-        <section className="py-28 bg-card relative overflow-hidden">
-          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-            <motion.div
-              className="text-center mb-16"
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true }}
-              variants={stagger}
-            >
-              <motion.div variants={fadeInUp}>
-                <span className="inline-flex items-center gap-2 rounded-full bg-romance-blush-100/80 px-5 py-2 text-sm font-semibold text-romance-blush-700 mb-6">
-                  <BarChart3 className="h-4 w-4" />
-                  Why 88Away
-                </span>
-              </motion.div>
-              <motion.h2
-                variants={fadeInUp}
-                className="font-serif text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground mb-6"
-              >
-                Built Different{" "}
-                <span className="bg-gradient-to-r from-romance-blush-500 to-romance-burgundy-500 bg-clip-text text-transparent">
-                  for Authors
-                </span>
-              </motion.h2>
-            </motion.div>
-
-            <motion.div
-              className="rounded-3xl border border-border/60 bg-background/80 backdrop-blur-sm overflow-hidden shadow-xl"
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true }}
-              variants={fadeInUp}
-            >
-              {/* Header */}
-              <div className="grid grid-cols-3 gap-4 p-6 bg-gradient-to-r from-romance-burgundy-50 to-tender-50 border-b border-border/40">
-                <div className="font-semibold text-foreground">Feature</div>
-                <div className="font-semibold text-center text-romance-burgundy-700">88Away</div>
-                <div className="font-semibold text-center text-muted-foreground">Others</div>
-              </div>
-
-              {/* Rows */}
-              {comparisonFeatures.map((row, index) => (
-                <div
-                  key={row.feature}
-                  className={`grid grid-cols-3 gap-4 p-6 ${index % 2 === 0 ? 'bg-white/50' : 'bg-muted/20'} border-b border-border/20 last:border-0`}
-                >
-                  <div className="text-foreground font-medium">{row.feature}</div>
-                  <div className="flex justify-center">
-                    {row.us === true ? (
-                      <div className="flex items-center gap-2 text-green-600">
-                        <CheckCircle2 className="h-5 w-5" />
-                        <span className="text-sm font-medium">Yes</span>
-                      </div>
-                    ) : (
-                      <span className="text-sm text-muted-foreground">{row.us}</span>
-                    )}
-                  </div>
-                  <div className="flex justify-center">
-                    {row.others === false ? (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <span className="w-5 h-0.5 bg-muted-foreground/40 rounded" />
-                        <span className="text-sm">No</span>
-                      </div>
-                    ) : (
-                      <span className="text-sm text-muted-foreground">{row.others}</span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </motion.div>
-          </div>
-        </section>
+        {/* ========== INTEGRATIONS SECTION ========== */}
+        <Integrations />
 
         {/* ========== PRICING SECTION ========== */}
-        <section className="py-28 bg-gradient-to-b from-background via-romance-champagne-50/30 to-background relative overflow-hidden">
+        <section id="pricing" className="py-28 bg-gradient-to-b from-background via-romance-champagne-50/30 to-background relative overflow-hidden">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <motion.div
               className="text-center mb-20"
@@ -1168,6 +1679,12 @@ export default function Landing() {
           </div>
         </section>
 
+        {/* ========== FAQ SECTION ========== */}
+        <FAQ />
+
+        {/* ========== NEWSLETTER SECTION ========== */}
+        <Newsletter />
+
         {/* ========== FINAL CTA SECTION ========== */}
         <section className="relative py-32 overflow-hidden">
           {/* Animated gradient background */}
@@ -1266,7 +1783,7 @@ export default function Landing() {
                   The premier writing platform for professional authors. AI-powered tools,
                   collaborative workflows, and seamless publishing - all in one place.
                 </p>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 mb-6">
                   <div className="flex items-center gap-1">
                     {[...Array(5)].map((_, i) => (
                       <Star key={i} className="h-4 w-4 fill-romance-champagne-400 text-romance-champagne-400" />
@@ -1274,13 +1791,29 @@ export default function Landing() {
                   </div>
                   <span className="text-sm text-gray-400">4.9/5 from 2,400+ reviews</span>
                 </div>
+                {/* Social links */}
+                <div className="flex items-center gap-4">
+                  {[
+                    { icon: <Twitter className="h-5 w-5" />, href: "#" },
+                    { icon: <Linkedin className="h-5 w-5" />, href: "#" },
+                    { icon: <Instagram className="h-5 w-5" />, href: "#" },
+                  ].map((social, i) => (
+                    <a
+                      key={i}
+                      href={social.href}
+                      className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+                    >
+                      {social.icon}
+                    </a>
+                  ))}
+                </div>
               </div>
 
               {/* Links */}
               <div>
                 <h4 className="font-semibold text-white mb-4">Product</h4>
                 <ul className="space-y-3 text-gray-400">
-                  <li><a href="/romance/series" className="hover:text-white transition-colors">Features</a></li>
+                  <li><a href="#features" className="hover:text-white transition-colors">Features</a></li>
                   <li><a href="#pricing" className="hover:text-white transition-colors">Pricing</a></li>
                   <li><a href="/romance/publishing" className="hover:text-white transition-colors">Publishing</a></li>
                   <li><a href="/romance/tropes" className="hover:text-white transition-colors">Trope Library</a></li>
