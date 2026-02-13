@@ -4,9 +4,9 @@ import { useLocation } from "wouter";
 import defaultOgImage from "@/assets/88away-logo.png";
 
 const SITE_NAME = "88Away";
-const DEFAULT_TITLE = `${SITE_NAME} — Professional Writing Platform`;
+const DEFAULT_TITLE = `${SITE_NAME} — The Ultimate KDP Publishing Platform for Romance Authors`;
 const DEFAULT_DESCRIPTION =
-  "88Away is a comprehensive writing platform with AI-powered assistance, real-time collaboration, and advanced story management tools for professional authors.";
+  "Write, design, optimize, and publish your romance novels directly to Amazon KDP. AI-powered writing tools, cover design studio, keyword research, and royalty analytics — built exclusively for romance authors by 88Away LLC.";
 
 type JsonLd = Record<string, unknown>;
 
