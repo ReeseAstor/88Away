@@ -7,6 +7,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Input } from "@/components/ui/input";
+import {
   ArrowRight,
   BarChart3,
   BookOpen,
@@ -14,6 +21,7 @@ import {
   Check,
   CheckCircle2,
   ChevronRight,
+  ChevronDown,
   Crown,
   FileText,
   Flame,
@@ -43,8 +51,8 @@ import {
 import logo from "@/assets/88away-logo-pink.png";
 import logoWhite from "@/assets/88away-logo-white.png";
 import { Seo } from "@/components/seo";
-import { motion } from "framer-motion";
-import { useState, useEffect } from "react";
+import { motion, useScroll, useTransform, AnimatePresence } from "framer-motion";
+import { useState, useEffect, useRef } from "react";
 
 // Animation variants
 const fadeInUp = {
@@ -76,6 +84,16 @@ const slideInRight = {
   visible: { opacity: 1, x: 0, transition: { duration: 0.7, ease: "easeOut" } },
 };
 
+const slideInLeft = {
+  hidden: { opacity: 0, x: -60 },
+  visible: { opacity: 1, x: 0, transition: { duration: 0.8, ease: "easeOut" } }
+};
+
+const slideInRight = {
+  hidden: { opacity: 0, x: 60 },
+  visible: { opacity: 1, x: 0, transition: { duration: 0.8, ease: "easeOut" } }
+};
+
 // Floating animation for decorative elements
 const float = {
   animate: {
@@ -96,6 +114,14 @@ const floatSlow = {
     y: [0, -10, 0],
     transition: { duration: 8, repeat: Infinity, ease: "easeInOut", delay: 2 },
   },
+};
+
+const pulse = {
+  animate: {
+    scale: [1, 1.05, 1],
+    opacity: [0.7, 1, 0.7],
+    transition: { duration: 3, repeat: Infinity, ease: "easeInOut" }
+  }
 };
 
 // Counter animation hook
@@ -740,6 +766,15 @@ export default function Landing() {
                 <p className="text-sm text-muted-foreground">
                   Free forever plan &middot; No credit card required &middot; Publish in minutes
                 </p>
+              </motion.div>
+
+              {/* Scroll indicator */}
+              <motion.div
+                className="absolute bottom-8 left-1/2 -translate-x-1/2"
+                animate={{ y: [0, 10, 0] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              >
+                <ChevronDown className="h-8 w-8 text-romance-burgundy-300" />
               </motion.div>
             </motion.div>
           </div>
@@ -1666,7 +1701,7 @@ export default function Landing() {
                   Write, design, optimize, and publish — all in one place.
                   Built with love by 88Away LLC.
                 </p>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 mb-6">
                   <div className="flex items-center gap-1">
                     {[...Array(5)].map((_, i) => (
                       <Star
@@ -1676,6 +1711,22 @@ export default function Landing() {
                     ))}
                   </div>
                   <span className="text-sm text-gray-400">4.9/5 from 4,800+ authors</span>
+                </div>
+                {/* Social links */}
+                <div className="flex items-center gap-4">
+                  {[
+                    { icon: <Twitter className="h-5 w-5" />, href: "#" },
+                    { icon: <Linkedin className="h-5 w-5" />, href: "#" },
+                    { icon: <Instagram className="h-5 w-5" />, href: "#" },
+                  ].map((social, i) => (
+                    <a
+                      key={i}
+                      href={social.href}
+                      className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+                    >
+                      {social.icon}
+                    </a>
+                  ))}
                 </div>
               </div>
 
