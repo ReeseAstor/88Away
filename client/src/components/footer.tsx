@@ -9,7 +9,7 @@ export function Footer() {
         <div className="container max-w-7xl mx-auto">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <p data-testid="text-copyright" className="text-sm text-muted-foreground">
-              © 2025 88Away. All rights reserved.
+              © {new Date().getFullYear()} 88Away LLC. All rights reserved.
             </p>
             <div className="flex gap-6 text-sm">
               <Link href="/newsletter" className="text-muted-foreground hover:text-foreground">
