@@ -84,16 +84,6 @@ const slideInRight = {
   visible: { opacity: 1, x: 0, transition: { duration: 0.7, ease: "easeOut" } },
 };
 
-const slideInLeft = {
-  hidden: { opacity: 0, x: -60 },
-  visible: { opacity: 1, x: 0, transition: { duration: 0.8, ease: "easeOut" } }
-};
-
-const slideInRight = {
-  hidden: { opacity: 0, x: 60 },
-  visible: { opacity: 1, x: 0, transition: { duration: 0.8, ease: "easeOut" } }
-};
-
 // Floating animation for decorative elements
 const float = {
   animate: {
