@@ -56,6 +56,31 @@ Configure the following environment variables in your Vercel project settings:
 4. Configure environment variables in the project settings
 5. Deploy
 
+
+## GitHub Actions + Vercel App Workflow (Recommended)
+
+This repo now includes `.github/workflows/vercel-deploy.yml` to connect GitHub events directly to your Vercel project.
+
+### What it does
+
+- Pull requests: builds and deploys a **Preview** deployment, then comments the URL back on the PR.
+- Pushes to `main`: builds and deploys **Production**.
+- `workflow_dispatch`: allows manual runs from the Actions tab.
+
+### One-time setup
+
+1. In Vercel, install the **Vercel for GitHub** app (if not already installed) and link this repository.
+2. In the Vercel project, open **Settings → General** and copy:
+   - `Project ID` → save as `VERCEL_PROJECT_ID` in GitHub repo secrets
+   - `Team ID` or account/org ID → save as `VERCEL_ORG_ID`
+3. In Vercel, create a personal token (or team token) with deploy access and save in GitHub repo secrets as `VERCEL_TOKEN`.
+4. In GitHub, go to **Settings → Secrets and variables → Actions** and add:
+   - `VERCEL_TOKEN`
+   - `VERCEL_ORG_ID`
+   - `VERCEL_PROJECT_ID`
+
+After this, every PR should automatically receive a preview URL comment from the workflow.
+
 ## Build Configuration
 
 The project includes optimized build settings in `vercel.json`:
